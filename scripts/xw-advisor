@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""
+Personal OS — xw-advisor: 决策参谋开关 (Decision Advisor Toggle)
+External drive: /Volumes/13384923891/hermes-agent/
+
+Usage:
+  xw-advisor on      开启决策参谋模式
+  xw-advisor off     关闭决策参谋模式
+  xw-advisor status  查看当前状态和偏好画像
+"""
+import sys
+import os
+import json
+
+sys.path.insert(0, "/Volumes/13384923891/hermes-agent/context-system")
+
+CONFIG_PATH = "/Volumes/13384923891/hermes-agent/context-system/popup_config.json"
+
+
+def load_config():
+    try:
+        with open(CONFIG_PATH, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_config(cfg):
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+
+def cmd_on():
+    cfg = load_config()
+    cfg["advisor_enabled"] = True
+    save_config(cfg)
+    print("🟢 决策参谋模式已开启")
+    print("   Hermes 将在对话中主动观察和记录你的偏好。")
+
+
+def cmd_off():
+    cfg = load_config()
+    cfg["advisor_enabled"] = False
+    save_config(cfg)
+    print("🔴 决策参谋模式已关闭")
+    print("   Hermes 将停止主动记录偏好，不打扰。")
+
+
+def cmd_status():
+    cfg = load_config()
+    enabled = cfg.get("advisor_enabled", False)
+    state = "🟢 开启" if enabled else "🔴 关闭"
+    print(f"决策参谋状态: {state}")
+
+    # Show preference profile
+    try:
+        from core.profiler import get_preference_profile
+        from core.db import init_db
+        init_db()
+        profile = get_preference_profile(min_confidence=0.6)
+    except Exception as e:
+        print(f"   ⚠️ 无法加载偏好画像: {e}")
+        return
+
+    if not profile:
+        print("   📭 暂无偏好数据。多和 Hermes 互动，它会逐渐了解你的风格。")
+        return
+
+    print(f"\n📊 偏好画像 ({sum(len(v) for v in profile.values())} 条高置信度偏好):")
+    print("━" * 50)
+    for domain, prefs in sorted(profile.items()):
+        print(f"  ▸ {domain}")
+        for p in prefs:
+            conf_bar = "█" * int(p["confidence"] * 10) + "░" * (10 - int(p["confidence"] * 10))
+            print(f"    {p['key']}: {p['value']}  [{conf_bar}] {p['confidence']:.0%}")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage:")
+        print("  xw-advisor on       开启决策参谋模式")
+        print("  xw-advisor off      关闭决策参谋模式")
+        print("  xw-advisor status   查看当前状态和偏好画像")
+        return
+
+    cmd = sys.argv[1]
+    if cmd == "on":
+        cmd_on()
+    elif cmd == "off":
+        cmd_off()
+    elif cmd == "status":
+        cmd_status()
+    else:
+        print(f"Unknown: {cmd}")
+        print("Usage: xw-advisor {on|off|status}")
+
+
+if __name__ == "__main__":
+    main()

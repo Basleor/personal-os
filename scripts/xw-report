@@ -1,0 +1,430 @@
+#!/usr/bin/env python3
+"""
+Personal OS — xw-report: 行为报告生成器 (Layer 01)
+External drive: /Volumes/13384923891/hermes-agent/
+v2.5 — Full behavioral report with daily/weekly/monthly views + project filter.
+
+Usage:
+  xw-report                    默认显示当日报告（数据太少则自动切周度）
+  xw-report --week              显示周度概览
+  xw-report --month             显示月度趋势
+  xw-report --project pom       只查看指定项目的数据
+  xw-report --week --project pom  组合过滤
+"""
+import sys
+sys.path.insert(0, "/Volumes/13384923891/hermes-agent/context-system")
+
+import argparse
+import time
+import sqlite3
+from datetime import datetime
+
+from core.db import init_db, DB_PATH
+from core.profiler import (
+    get_daily_summary,
+    get_weekly_summary,
+    get_task_distribution,
+    get_session_timeline,
+)
+
+
+WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+
+# Visual bar segments (8 blocks = 100%)
+BAR_SEGMENTS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
+
+
+def _weekday(date_str: str) -> str:
+    """Return Chinese weekday name for a YYYY-MM-DD string."""
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        return WEEKDAY_NAMES[dt.weekday()]
+    except ValueError:
+        return ""
+
+
+def _bar(percentage: float, width: int = 10) -> str:
+    """Draw a horizontal bar for a 0–100 percentage."""
+    total_segments = width * 8
+    filled = round(percentage / 100 * total_segments)
+    full_blocks = filled // 8
+    remainder = filled % 8
+    bar = "█" * full_blocks
+    if remainder > 0:
+        bar += BAR_SEGMENTS[remainder]
+    bar = bar.ljust(width, " ")
+    return bar
+
+
+def _time_display(ts: str) -> str:
+    """Extract HH:MM from a full timestamp string."""
+    if ts and " " in ts:
+        return ts.split(" ")[1][:5]
+    return ts or "--:--"
+
+
+def _whiteboard_stats() -> tuple:
+    """Return (pending_count, flushed_count) from whiteboard_ideas."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT status, COUNT(*) FROM whiteboard_ideas GROUP BY status"
+    )
+    counts = dict(cursor.fetchall())
+    conn.close()
+    return counts.get("pending", 0), counts.get("flushed", 0)
+
+
+def _has_any_data(project: "str | None" = None) -> bool:
+    """Check whether ANY table has data."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM whiteboard_ideas")
+    wb = cursor.fetchone()[0]
+    if project is None:
+        cursor.execute("SELECT COUNT(*) FROM session_tasks")
+    else:
+        cursor.execute("SELECT COUNT(*) FROM session_tasks WHERE project=?", (project,))
+    st = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM profiler_events")
+    pe = cursor.fetchone()[0]
+    conn.close()
+    return (wb + st + pe) > 0
+
+
+def report_daily(project: "str | None" = None):
+    """Generate and print the daily report."""
+    today = time.strftime("%Y-%m-%d")
+    summary = get_daily_summary(today, project=project)
+
+    # Auto-upgrade to weekly if no data today
+    if not summary:
+        report_weekly(project=project)
+        return
+
+    weekday = _weekday(today)
+    total = summary["total_tasks"]
+
+    proj_label = f"  📁 项目: {project}" if project else ""
+    print(f"📋 Personal OS — 行为回顾报告")
+    if proj_label:
+        print(proj_label)
+    print(f"═" * 50)
+
+    header_parts = [f"  📅 日期: {today} ({weekday})"]
+    if summary.get("first_task_time") and summary.get("last_task_time"):
+        ft = _time_display(summary["first_task_time"])
+        lt = _time_display(summary["last_task_time"])
+        ah = summary.get("active_hours")
+        ah_str = f"{ah}h" if ah else "—"
+        header_parts.append(f"  🕐 活跃时段: {ft} ~ {lt} ({ah_str})")
+    header_parts.append(
+        f"  📊 共完成 {total} 个任务"
+        + (f"，分布在 {summary['sessions']} 个会话中" if summary["sessions"] else "")
+    )
+    print("\n".join(header_parts))
+    print(f"═" * 50)
+
+    # Task distribution
+    dist = get_task_distribution(days=1, project=project)
+    if dist:
+        print(f"\n▸ 任务分布")
+        max_width = max(len(k) for k in dist)
+        for task_type, info in dist.items():
+            pct = info["percentage"]
+            bar = _bar(pct)
+            label = task_type.ljust(max_width + 2)
+            print(f"  {label} {bar} {pct}% ({info['count']})")
+
+    # Recent timeline
+    timeline = get_session_timeline(limit=10, project=project)
+    if timeline:
+        print(f"\n▸ 最近任务流")
+        for entry in timeline:
+            t = _time_display(entry["timestamp"])
+            tt = entry["task_type"]
+            desc = entry["description"] or "(无描述)"
+            purpose = entry.get("event_note", "")
+            line = f"  {t}  {tt}   {desc}"
+            if purpose:
+                line += f"  — {purpose}"
+            print(line)
+
+    # Weekly context
+    weekly = get_weekly_summary(project=project)
+    if weekly and weekly["total_tasks"] > 0:
+        print(f"\n▸ 本周趋势 (过去 7 天)")
+        avg = round(weekly["total_tasks"] / 7, 1)
+        line = f"  总任务: {weekly['total_tasks']} 个 | 日均: {avg} 个"
+        if weekly["peak_day"]:
+            pk_day = f"{weekly['peak_day']} ({_weekday(weekly['peak_day'])})"
+            line += f" | 最忙: {pk_day} ({weekly['peak_count']} 个)"
+
+        dailies = weekly.get("daily_breakdown", {})
+        if dailies:
+            lightest = min(dailies, key=lambda d: dailies[d]["total"])
+            line += f" | 最轻: {lightest} ({_weekday(lightest)}) ({dailies[lightest]['total']} 个)"
+        print(line)
+
+        if weekly["trend"] is not None:
+            arrow = "↑" if weekly["trend"] >= 0 else "↓"
+            print(f"  趋势: {arrow} 比上周 {'多' if weekly['trend'] >= 0 else '少'} {abs(weekly['trend'])}%")
+
+        dist30 = get_task_distribution(days=7, project=project)
+        programming_types = [k for k in dist30 if "编程" in k or "代码" in k]
+        if programming_types:
+            prog_pct = sum(dist30[t]["percentage"] for t in programming_types)
+            print(f"  编程占比: {prog_pct}%", end="")
+            if weekly["trend"] is not None:
+                print(f" {arrow} 比上周 {'多' if weekly['trend'] >= 0 else '少'} {abs(weekly['trend'])}%")
+            else:
+                print()
+
+    # Whiteboard
+    pending, flushed = _whiteboard_stats()
+    print(f"\n▸ 灵感白板")
+    print(f"  待处理碎片: {pending} 个 | 已缝合: {flushed} 个")
+    if pending > 0:
+        print(f"  提示: 执行 xw-idea flush 进行语义缝合")
+    print()
+
+
+def report_weekly(project: "str | None" = None):
+    """Generate and print the weekly overview."""
+    weekly = get_weekly_summary(project=project)
+
+    if weekly["total_tasks"] == 0:
+        if not _has_any_data(project):
+            print("📭 暂无行为数据。你的 Personal OS 内核正在积累数据中，"
+                  "多和 Hermes 互动几次再来查看吧。")
+            return
+        proj_label = f"  📁 项目: {project}" if project else ""
+        print(f"📋 Personal OS — 周度回顾报告")
+        if proj_label:
+            print(proj_label)
+        print(f"═" * 50)
+        print(f"  📅 过去 7 天")
+        print(f"  📊 本周暂无任务记录")
+        print()
+        pending, flushed = _whiteboard_stats()
+        print(f"▸ 灵感白板")
+        print(f"  待处理碎片: {pending} 个 | 已缝合: {flushed} 个")
+        if pending > 0:
+            print(f"  提示: 执行 xw-idea flush 进行语义缝合")
+        print()
+        return
+
+    proj_label = f"  📁 项目: {project}" if project else ""
+    print(f"📋 Personal OS — 周度回顾报告")
+    if proj_label:
+        print(proj_label)
+    print(f"═" * 50)
+    avg = round(weekly["total_tasks"] / 7, 1)
+    print(f"  📅 过去 7 天")
+    print(f"  📊 总任务: {weekly['total_tasks']} 个 | 日均: {avg} 个")
+
+    if weekly["peak_day"]:
+        print(f"  🔥 最忙: {weekly['peak_day']} ({_weekday(weekly['peak_day'])}) — {weekly['peak_count']} 个任务")
+
+    if weekly["trend"] is not None:
+        arrow = "↑" if weekly["trend"] >= 0 else "↓"
+        print(f"  📈 趋势: {arrow} 比上周 {'多' if weekly['trend'] >= 0 else '少'} {abs(weekly['trend'])}%")
+
+    print(f"═" * 50)
+
+    dailies = weekly.get("daily_breakdown", {})
+    if dailies:
+        print(f"\n▸ 每日详情")
+        for d in sorted(dailies.keys()):
+            info = dailies[d]
+            bar = _bar(min(info["total"] * 10, 100), width=8)
+            primary = info.get("primary", "—")
+            print(f"  {d} ({_weekday(d)})  {bar} {info['total']:>2} 个  {primary}")
+
+    dist = get_task_distribution(days=7, project=project)
+    if dist:
+        print(f"\n▸ 任务分布")
+        max_width = max(len(k) for k in dist)
+        for task_type, info in dist.items():
+            pct = info["percentage"]
+            bar = _bar(pct)
+            label = task_type.ljust(max_width + 2)
+            print(f"  {label} {bar} {pct}% ({info['count']})")
+
+    timeline = get_session_timeline(limit=10, project=project)
+    if timeline:
+        print(f"\n▸ 最近任务流")
+        for entry in timeline:
+            t = _time_display(entry["timestamp"])
+            tt = entry["task_type"]
+            desc = entry["description"] or "(无描述)"
+            purpose = entry.get("event_note", "")
+            line = f"  {t}  {tt}   {desc}"
+            if purpose:
+                line += f"  — {purpose}"
+            print(line)
+
+    pending, flushed = _whiteboard_stats()
+    print(f"\n▸ 灵感白板")
+    print(f"  待处理碎片: {pending} 个 | 已缝合: {flushed} 个")
+    if pending > 0:
+        print(f"  提示: 执行 xw-idea flush 进行语义缝合")
+    print()
+
+
+def report_monthly(project: "str | None" = None):
+    """Generate and print the monthly trend overview."""
+    if not _has_any_data(project):
+        print("📭 暂无行为数据。你的 Personal OS 内核正在积累数据中，"
+              "多和 Hermes 互动几次再来查看吧。")
+        return
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    if project is None:
+        cursor.execute(
+            "SELECT COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime')"
+        )
+    else:
+        cursor.execute(
+            "SELECT COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') AND project=?",
+            (project,)
+        )
+    total_30 = cursor.fetchone()[0]
+
+    if project is None:
+        cursor.execute(
+            "SELECT DATE(timestamp) as d, COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') "
+            "GROUP BY d ORDER BY d ASC"
+        )
+    else:
+        cursor.execute(
+            "SELECT DATE(timestamp) as d, COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') AND project=? "
+            "GROUP BY d ORDER BY d ASC",
+            (project,)
+        )
+    daily_rows = cursor.fetchall()
+
+    if project is None:
+        cursor.execute(
+            "SELECT task_type, COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') "
+            "GROUP BY task_type ORDER BY COUNT(*) DESC"
+        )
+    else:
+        cursor.execute(
+            "SELECT task_type, COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') AND project=? "
+            "GROUP BY task_type ORDER BY COUNT(*) DESC",
+            (project,)
+        )
+    type_rows = cursor.fetchall()
+
+    if project is None:
+        cursor.execute(
+            "SELECT COUNT(DISTINCT session_id) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime')"
+        )
+    else:
+        cursor.execute(
+            "SELECT COUNT(DISTINCT session_id) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') AND project=?",
+            (project,)
+        )
+    session_count = cursor.fetchone()[0]
+
+    if project is None:
+        cursor.execute(
+            "SELECT STRFTIME('%W', timestamp) as week, COUNT(*), "
+            "MIN(DATE(timestamp)) as week_start "
+            "FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') "
+            "GROUP BY week ORDER BY week_start ASC"
+        )
+    else:
+        cursor.execute(
+            "SELECT STRFTIME('%W', timestamp) as week, COUNT(*), "
+            "MIN(DATE(timestamp)) as week_start "
+            "FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') AND project=? "
+            "GROUP BY week ORDER BY week_start ASC",
+            (project,)
+        )
+    week_rows = cursor.fetchall()
+
+    conn.close()
+
+    proj_label = f"  📁 项目: {project}" if project else ""
+    print(f"📋 Personal OS — 月度趋势报告")
+    if proj_label:
+        print(proj_label)
+    print(f"═" * 50)
+    print(f"  📅 过去 30 天")
+    print(f"  📊 总任务: {total_30} 个 | 日均: {round(total_30 / 30, 1)} 个")
+    print(f"  💬 会话数: {session_count} 个")
+    if daily_rows:
+        peak = max(daily_rows, key=lambda r: r[1])
+        print(f"  🔥 最忙日: {peak[0]} ({_weekday(peak[0])}) — {peak[1]} 个任务")
+    print(f"═" * 50)
+
+    if type_rows:
+        print(f"\n▸ 任务分布 (30 天)")
+        total_type = sum(r[1] for r in type_rows)
+        max_width = max(len(r[0]) for r in type_rows)
+        for task_type, cnt in type_rows:
+            pct = round(cnt / total_type * 100, 1)
+            bar = _bar(pct)
+            label = task_type.ljust(max_width + 2)
+            print(f"  {label} {bar} {pct}% ({cnt})")
+
+    if week_rows:
+        print(f"\n▸ 周度趋势")
+        for week_num, cnt, week_start in week_rows:
+            bar = _bar(min(cnt * 5, 100), width=8)
+            print(f"  {week_start} 起  {bar} {cnt} 个")
+
+    pending, flushed = _whiteboard_stats()
+    print(f"\n▸ 灵感白板")
+    print(f"  待处理碎片: {pending} 个 | 已缝合: {flushed} 个")
+    if pending > 0:
+        print(f"  提示: 执行 xw-idea flush 进行语义缝合")
+    print()
+
+
+def main():
+    init_db()
+
+    parser = argparse.ArgumentParser(
+        description="Personal OS — 行为回顾报告生成器"
+    )
+    parser.add_argument(
+        "--week", action="store_true",
+        help="显示周度概览（过去 7 天）"
+    )
+    parser.add_argument(
+        "--month", action="store_true",
+        help="显示月度趋势（过去 30 天）"
+    )
+    parser.add_argument(
+        "-p", "--project",
+        help="只显示指定项目的数据（例如: pom, work, blog）"
+    )
+    args = parser.parse_args()
+
+    proj = args.project if args.project else None
+
+    if args.month:
+        report_monthly(project=proj)
+    elif args.week:
+        report_weekly(project=proj)
+    else:
+        report_daily(project=proj)
+
+
+if __name__ == "__main__":
+    main()

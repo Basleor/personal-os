@@ -1,0 +1,20 @@
+#!/bin/bash
+# Personal OS — xw 命令调度器 (v1.1)
+# 用法: xw report | xw idea "text" | xw flush | xw dashboard | xw search | ...
+
+DRIVE="/Volumes/13384923891/hermes-agent"
+CMD="$1"
+shift 2>/dev/null
+
+case "$CMD" in
+    report)    exec python3 "$DRIVE/scripts/xw-report" "$@" ;;
+    idea)      exec python3 "$DRIVE/scripts/xw-idea" "$@" ;;
+    flush)     exec python3 "$DRIVE/scripts/xw-idea" flush ;;
+    advisor)   exec python3 "$DRIVE/scripts/xw-advisor" "$@" ;;
+    hotkey)    exec python3 "$DRIVE/scripts/xw-hotkey" "$@" ;;
+    flow)      exec python3 "$DRIVE/scripts/xw-flow" "$@" ;;
+    dashboard) exec python3 "$DRIVE/scripts/xw-dashboard" "$@" ;;
+    search)    exec python3 "$DRIVE/scripts/xw-search" "$@" ;;
+    *)         echo "xw: 未知命令 '$CMD'"
+               echo "用法: xw {report|idea|flush|advisor|hotkey|flow|dashboard|search} [参数]" ;;
+esac

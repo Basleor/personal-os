@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""
+Personal OS — xw-idea: 灵感捕获控制脚本
+External drive: /Volumes/13384923891/hermes-agent/
+Usage:
+  xw-idea "your fragment thought"       # Capture an idea
+  xw-idea "your thought" -p myproject   # Capture with project tag
+  xw-idea popup                          # Open floating capture window
+  xw-idea flush                          # Stitch all pending ideas into a report
+  xw-idea list                           # List pending ideas
+  xw-idea list -p myproject              # List pending ideas for a project
+"""
+import sys
+import os
+import subprocess
+import argparse
+
+sys.path.insert(0, "/Volumes/13384923891/hermes-agent/context-system")
+
+CURRENT_SESSION = os.getenv("HERMES_SESSION_ID", "BOOT_SESSION")
+CURRENT_TASK = "📋 通用"
+
+from core.ideas import capture_idea, get_pending_ideas, generate_flush_report, prepare_flush_context
+
+
+def cmd_capture(text: str, project: str = ""):
+    """Capture a fragment idea."""
+    row_id = capture_idea(CURRENT_SESSION, CURRENT_TASK, text, project)
+    proj_tag = f" [{project}]" if project else ""
+    print(f" 📥 灵感已捕获 [{CURRENT_TASK}]{proj_tag}")
+    print(f"    ID: {row_id} | Session: {CURRENT_SESSION}")
+
+
+def cmd_list(project: str = None):
+    """List all pending ideas."""
+    ideas = get_pending_ideas(limit=100, project=project)
+    if not ideas:
+        print(" 📭 灵感为空，暂无待缝合的碎片。")
+        return
+    proj_label = f" (项目: {project})" if project else ""
+    print(f" 📋 待缝合灵感碎片 (共 {len(ideas)} 条){proj_label}:")
+    print("━" * 60)
+    for idea_id, ts, sess, task, raw in ideas:
+        print(f"  [{idea_id}] {ts} | {task}")
+        print(f"      {raw[:80]}{'...' if len(raw) > 80 else ''}")
+        print()
+
+
+def cmd_flush():
+    """Flush all pending ideas into a stitched report with LLM-ready context."""
+    pending = get_pending_ideas()
+    if not pending:
+        print(" 📭 灵感为空，无碎片需要缝合。")
+        return
+
+    # ── Step 1: Prepare rich context for LLM stitching ──
+    context = prepare_flush_context()
+    prompt_text = context["prompt_text"]
+    meta_count = len(context["meta_goals"])
+
+    prompt_path = "/Volumes/13384923891/hermes-agent/context-system/Whiteboard/.flush_prompt.md"
+    with open(prompt_path, 'w', encoding='utf-8') as f:
+        f.write(prompt_text)
+
+    # ── Step 2: Generate the standard flush report ──
+    print("━━━ 正在缝合外挂硬盘中的灵感碎片 ━━━")
+    print(f"   检测到 {len(pending)} 条待处理碎片...")
+
+    report_path = generate_flush_report(CURRENT_SESSION)
+    if report_path:
+        print(f" ✅ 灵感缝合完成！报告已落盘至:")
+        print(f"    {report_path}")
+        print()
+        print(f" ✅ 缝合上下文已准备完毕 ({len(pending)}条灵感, {meta_count}个元目标)")
+        print()
+        print("接下来在 Hermes 对话中说：")
+        print('  "执行缝合"')
+        print("Hermes 会读取上下文并进行深度语义缝合。")
+    else:
+        print(" ⚠️ 缝合过程出现异常，请检查数据库连接。")
+
+
+def cmd_popup():
+    """Launch the floating sticky-note capture window via osascript
+    to ensure it runs in the user's GUI session."""
+    popup_path = "/Volumes/13384923891/hermes-agent/scripts/xw-idea-popup"
+    try:
+        subprocess.Popen(
+            ["/usr/bin/osascript", "-e",
+             f'tell application "Terminal" to do script "python3 {popup_path} > /dev/null 2>&1 &"'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:
+        subprocess.Popen(
+            [sys.executable, popup_path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    print("🪐 悬浮便签已弹出，⇧↵ 提交，Esc 关闭。")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Personal OS — 灵感捕获工具")
+    parser.add_argument("text", nargs="?", help="灵感内容（或操作命令: popup/flush/list）")
+    parser.add_argument("-p", "--project", default="", help="绑定项目标识 (例如: pom, work, blog)")
+
+    args = parser.parse_args()
+
+    if not args.text:
+        print("Usage:")
+        print('  xw-idea "your fragment thought"       # 捕获碎片灵感')
+        print('  xw-idea "your thought" -p myproject   # 捕获并绑定项目')
+        print("  xw-idea popup                          # 打开悬浮便签窗口")
+        print("  xw-idea flush                          # 缝合所有待处理灵感")
+        print("  xw-idea list                           # 列出待处理灵感")
+        print("  xw-idea list -p myproject              # 列出某项目待处理灵感")
+        return
+
+    action = args.text
+
+    if action == "flush":
+        cmd_flush()
+    elif action == "list":
+        proj_filter = args.project if args.project else None
+        cmd_list(project=proj_filter)
+    elif action == "popup":
+        cmd_popup()
+    else:
+        cmd_capture(action, project=args.project)
+
+
+if __name__ == "__main__":
+    main()

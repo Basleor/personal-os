@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+"""
+Personal OS — xw-dashboard: 可视化仪表盘 (Layer 03 Render)
+External drive: /Volumes/13384923891/hermes-agent/
+v1.0 — Pure Python, zero dependencies, self-contained HTML + SVG.
+
+Usage:
+  xw-dashboard              Full dashboard, auto-open in browser
+  xw-dashboard --no-open    Generate HTML only, don't open browser
+  xw-dashboard -p pom       Filter by project
+"""
+import sys
+sys.path.insert(0, "/Volumes/13384923891/hermes-agent/context-system")
+
+import argparse
+import math
+import os
+import time
+import webbrowser
+from datetime import datetime, timedelta
+from typing import Optional
+
+from core.db import init_db, get_connection, DB_PATH
+
+DASHBOARD_PATH = "/Volumes/13384923891/hermes-agent/context-system/dashboard.html"
+
+# ── Color palette (dark theme, Pom-style) ──
+BG = "#0d1117"
+CARD_BG = "#161b22"
+BORDER = "#30363d"
+ACCENT = "#f0c040"
+TEXT = "#c9d1d9"
+TEXT_MUTED = "#8b949e"
+GREEN = "#3fb950"
+BLUE = "#58a6ff"
+ORANGE = "#d2991d"
+RED = "#f85149"
+PURPLE = "#bc8cff"
+CHART_COLORS = ["#58a6ff", "#3fb950", "#d2991d", "#f85149", "#bc8cff",
+                "#79c0ff", "#56d364", "#e3b341", "#ff7b72", "#d2a8ff"]
+
+WEEKDAY_ZH = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+
+
+def now() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def query_stats(project: Optional[str] = None) -> dict:
+    """Gather all stats from analytics.db."""
+    conn = get_connection()
+    c = conn.cursor()
+    stats = {}
+
+    # Total tasks
+    if project:
+        c.execute("SELECT COUNT(*) FROM session_tasks WHERE project=?", (project,))
+    else:
+        c.execute("SELECT COUNT(*) FROM session_tasks")
+    stats["total_tasks"] = c.fetchone()[0]
+
+    # Sessions
+    if project:
+        c.execute("SELECT COUNT(DISTINCT session_id) FROM session_tasks WHERE project=?", (project,))
+    else:
+        c.execute("SELECT COUNT(DISTINCT session_id) FROM session_tasks")
+    stats["sessions"] = c.fetchone()[0]
+
+    # Ideas
+    c.execute("SELECT COUNT(*) FROM ideas")
+    stats["total_ideas"] = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM ideas WHERE status='pending'")
+    stats["pending_ideas"] = c.fetchone()[0]
+
+    # Projects
+    projects = set()
+    try:
+        c.execute("SELECT DISTINCT project FROM session_tasks WHERE project != ''")
+        for r in c.fetchall():
+            projects.add(r[0])
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("SELECT DISTINCT project FROM ideas WHERE project != ''")
+        for r in c.fetchall():
+            projects.add(r[0])
+    except sqlite3.OperationalError:
+        pass
+    stats["projects"] = sorted(projects)
+
+    # Task distribution (last 30 days)
+    if project:
+        c.execute(
+            "SELECT task_type, COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') AND project=? "
+            "GROUP BY task_type ORDER BY COUNT(*) DESC", (project,)
+        )
+    else:
+        c.execute(
+            "SELECT task_type, COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-30 days', 'localtime') "
+            "GROUP BY task_type ORDER BY COUNT(*) DESC"
+        )
+    dist = [(r[0], r[1]) for r in c.fetchall()]
+    stats["task_dist"] = dist
+
+    # Daily activity (last 14 days)
+    today = datetime.now().date()
+    daily = {}
+    if project:
+        c.execute(
+            "SELECT DATE(timestamp) as d, COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-14 days', 'localtime') AND project=? "
+            "GROUP BY d ORDER BY d", (project,)
+        )
+    else:
+        c.execute(
+            "SELECT DATE(timestamp) as d, COUNT(*) FROM session_tasks "
+            "WHERE timestamp >= DATE('now', '-14 days', 'localtime') "
+            "GROUP BY d ORDER BY d"
+        )
+    for d, cnt in c.fetchall():
+        daily[d] = cnt
+
+    # Fill gaps for all 14 days
+    daily_filled = []
+    for i in range(13, -1, -1):
+        d = (today - timedelta(days=i)).isoformat()
+        daily_filled.append({
+            "date": d,
+            "weekday": WEEKDAY_ZH[(today - timedelta(days=i)).weekday()],
+            "count": daily.get(d, 0),
+        })
+    stats["daily_activity"] = daily_filled
+
+    # Recent tasks
+    if project:
+        c.execute(
+            "SELECT timestamp, task_type, description, session_id, COALESCE(event_note,'') "
+            "FROM session_tasks WHERE project=? ORDER BY timestamp DESC LIMIT 20", (project,)
+        )
+    else:
+        c.execute(
+            "SELECT timestamp, task_type, description, session_id, COALESCE(event_note,'') "
+            "FROM session_tasks ORDER BY timestamp DESC LIMIT 20"
+        )
+    stats["recent_tasks"] = [
+        {"ts": r[0], "type": r[1], "desc": r[2] or "(无描述)", "sid": r[3], "note": r[4]}
+        for r in c.fetchall()
+    ]
+
+    # Idea timeline
+    c.execute(
+        "SELECT timestamp, raw_idea, current_task_type, project "
+        "FROM ideas ORDER BY timestamp DESC LIMIT 20"
+    )
+    stats["recent_ideas"] = [
+        {"ts": r[0], "text": r[1], "task": r[2], "project": r[3]}
+        for r in c.fetchall()
+    ]
+
+    # Project summary
+    try:
+        c.execute(
+            "SELECT project, COUNT(*) FROM session_tasks WHERE project != '' "
+            "GROUP BY project ORDER BY COUNT(*) DESC"
+        )
+    except sqlite3.OperationalError:
+        c.execute("SELECT '', 0")  # dummy
+    stats["project_summary"] = [(r[0], r[1]) for r in c.fetchall() if r[0]]
+
+    conn.close()
+    return stats
+
+
+def svg_pie(dist: list, size: int = 200) -> str:
+    """Generate an SVG pie chart from (label, count) distribution."""
+    if not dist:
+        return '<text x="100" y="100" fill="#8b949e" text-anchor="middle">暂无数据</text>'
+    total = sum(c for _, c in dist)
+    if total == 0:
+        return '<text x="100" y="100" fill="#8b949e" text-anchor="middle">暂无数据</text>'
+    cx, cy, r = size / 2, size / 2, size * 0.38
+    angle = -math.pi / 2  # Start from top
+    slices = []
+    for i, (label, count) in enumerate(dist):
+        pct = count / total
+        sweep = pct * 2 * math.pi
+        end_angle = angle + sweep
+        x1 = cx + r * math.cos(angle)
+        y1 = cy + r * math.sin(angle)
+        x2 = cx + r * math.cos(end_angle)
+        y2 = cy + r * math.sin(end_angle)
+        large = 1 if sweep > math.pi else 0
+        color = CHART_COLORS[i % len(CHART_COLORS)]
+        slices.append(
+            f'<path d="M{cx:.1f},{cy:.1f} L{x1:.1f},{y1:.1f} A{r:.1f},{r:.1f} 0 {large},1 {x2:.1f},{y2:.1f} Z" '
+            f'fill="{color}" stroke="{BG}" stroke-width="1"><title>{label}: {count} ({round(pct*100,1)}%)</title></path>'
+        )
+        angle = end_angle
+    return "\n".join(slices)
+
+
+def svg_bar(daily_data: list, width: int = 560, height: int = 200) -> str:
+    """Generate an SVG bar chart from daily activity data."""
+    max_val = max(d["count"] for d in daily_data) if daily_data else 1
+    if max_val == 0:
+        max_val = 1
+    margin = {"top": 5, "right": 10, "bottom": 30, "left": 5}
+    chart_w = width - margin["left"] - margin["right"]
+    chart_h = height - margin["top"] - margin["bottom"]
+    bar_w = chart_w / len(daily_data) - 4
+    bars = []
+    for i, d in enumerate(daily_data):
+        x = margin["left"] + i * (chart_w / len(daily_data)) + 2
+        bar_h = (d["count"] / max_val) * chart_h
+        y = height - margin["bottom"] - bar_h
+        color = ACCENT if d["count"] > 0 else "#30363d"
+        bars.append(
+            f'<rect x="{x:.0f}" y="{y:.0f}" width="{bar_w:.0f}" height="{bar_h:.0f}" '
+            f'fill="{color}" rx="2"><title>{d["date"]}: {d["count"]} 个任务</title></rect>'
+        )
+        # Day label
+        if len(daily_data) <= 14:
+            bars.append(
+                f'<text x="{x + bar_w/2:.0f}" y="{height - 5}" fill="#8b949e" '
+                f'text-anchor="middle" font-size="9">{d["weekday"][1]}</text>'
+            )
+    return "\n".join(bars)
+
+
+def svg_project_bars(projects: list, width: int = 400, height: int = 160) -> str:
+    """Generate horizontal bar chart for project summary."""
+    if not projects:
+        return '<text x="50" y="80" fill="#8b949e">暂无项目数据</text>'
+    max_val = max(c for _, c in projects)
+    margin = {"left": 80, "right": 40, "top": 5, "bottom": 5}
+    chart_w = width - margin["left"] - margin["right"]
+    h_per_bar = (height - margin["top"] - margin["bottom"]) / max(len(projects), 1)
+    bars = []
+    for i, (proj, cnt) in enumerate(projects):
+        y = margin["top"] + i * h_per_bar + 4
+        bar_w = (cnt / max_val) * chart_w
+        color = CHART_COLORS[i % len(CHART_COLORS)]
+        bars.append(
+            f'<text x="5" y="{y + h_per_bar/2:.0f}" fill="{TEXT}" font-size="11" '
+            f'text-anchor="end">{proj}</text>'
+        )
+        bars.append(
+            f'<rect x="{margin["left"]}" y="{y:.0f}" width="{bar_w:.0f}" height="{h_per_bar - 8:.0f}" '
+            f'fill="{color}" rx="3"/>'
+        )
+        bars.append(
+            f'<text x="{margin["left"] + bar_w + 8:.0f}" y="{y + h_per_bar/2:.0f}" '
+            f'fill="{TEXT_MUTED}" font-size="10">{cnt}</text>'
+        )
+    return "\n".join(bars)
+
+
+def gen_dashboard(stats: dict, project: Optional[str] = None) -> str:
+    """Generate the complete HTML dashboard."""
+    title = f"🪐 Personal OS Dashboard — {project}" if project else "🪐 Personal OS Dashboard"
+    subtitle = f'<div style="color:#8b949e;font-size:13px">项目: {project} | 生成时间: {now()}</div>' if project else f'<div style="color:#8b949e;font-size:13px">生成时间: {now()}</div>'
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body {{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:{BG}; color:{TEXT}; padding:24px; min-height:100vh;
+}}
+h1 {{ font-size:22px; margin-bottom:4px; }}
+h2 {{ font-size:14px; color:{TEXT_MUTED}; text-transform:uppercase; letter-spacing:0.5px; margin:24px 0 12px; }}
+.cards {{ display:flex; gap:16px; flex-wrap:wrap; margin:20px 0; }}
+.card {{
+  flex:1; min-width:140px; max-width:220px;
+  background:{CARD_BG}; border:1px solid {BORDER}; border-radius:8px; padding:16px;
+}}
+.card .num {{ font-size:32px; font-weight:700; color:{ACCENT}; }}
+.card .label {{ font-size:12px; color:{TEXT_MUTED}; margin-top:4px; }}
+.chart-row {{ display:flex; gap:20px; flex-wrap:wrap; }}
+.chart-box {{
+  background:{CARD_BG}; border:1px solid {BORDER}; border-radius:8px; padding:20px;
+  flex:1; min-width:300px;
+}}
+.chart-box h3 {{ font-size:13px; color:{TEXT_MUTED}; margin-bottom:12px; }}
+.timeline {{ background:{CARD_BG}; border:1px solid {BORDER}; border-radius:8px; padding:20px; margin-top:20px; }}
+.timeline-item {{ display:flex; gap:12px; padding:8px 0; border-bottom:1px solid {BORDER}; }}
+.timeline-item:last-child {{ border:none; }}
+.timeline-item .ts {{ color:{TEXT_MUTED}; font-size:11px; white-space:nowrap; min-width:100px; }}
+.timeline-item .type {{ background:#1f6feb22; color:{BLUE}; font-size:10px; padding:1px 6px; border-radius:3px; white-space:nowrap; }}
+.timeline-item .desc {{ font-size:13px; flex:1; }}
+.timeline-item .proj {{ color:{PURPLE}; font-size:10px; }}
+svg text {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }}
+</style>
+</head>
+<body>
+<h1>{title}</h1>
+{subtitle}
+
+<!-- Overview Cards -->
+<div class="cards">
+  <div class="card"><div class="num">{stats['total_tasks']}</div><div class="label">总任务数</div></div>
+  <div class="card"><div class="num">{stats['sessions']}</div><div class="label">会话数</div></div>
+  <div class="card"><div class="num">{stats['pending_ideas']}</div><div class="label">待处理灵感</div></div>
+  <div class="card"><div class="num">{stats['total_ideas']}</div><div class="label">总灵感数</div></div>
+  <div class="card"><div class="num">{len(stats['projects'])}</div><div class="label">活跃项目</div></div>
+</div>
+
+<h2>📊 任务分布 (30天)</h2>
+<div class="chart-row">
+  <div class="chart-box">
+    <h3>按类型</h3>
+    <svg viewBox="0 0 200 200" width="200" height="200">
+      {svg_pie(stats['task_dist'])}
+    </svg>
+    <div style="margin-top:10px;font-size:11px;">
+      {"".join(f'<span style="display:inline-block;margin-right:10px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{CHART_COLORS[i%10]};margin-right:4px;vertical-align:middle"></span>{l} ({c})</span>' for i,(l,c) in enumerate(stats['task_dist'][:5]))}
+    </div>
+  </div>
+  <div class="chart-box" style="flex:2;">
+    <h3>每日活跃度 (14天)</h3>
+    <svg viewBox="0 0 560 200" width="100%" height="200" preserveAspectRatio="xMidYMid meet">
+      {svg_bar(stats['daily_activity'])}
+    </svg>
+  </div>
+</div>
+
+<!-- Project Summary -->
+{"".join(f'<h2>📁 项目视图</h2><div class="chart-row"><div class="chart-box"><svg viewBox="0 0 400 160" width="100%" height="160">{svg_project_bars(stats["project_summary"])}</svg></div></div>' if stats["project_summary"] else '')}
+
+<!-- Recent Tasks -->
+<h2>🕐 最近任务流</h2>
+<div class="timeline">
+  {''.join(f'<div class="timeline-item"><span class="ts">{t["ts"][:16]}</span><span class="type">{t["type"]}</span><span class="desc">{t["desc"][:60]}</span>{"<span class=proj>" + t.get("project","") + "</span>" if t.get("project") else ""}</div>' for t in stats['recent_tasks'][:15])}
+  {'' if stats['recent_tasks'] else '<div style="color:#8b949e;text-align:center;padding:20px">暂无任务记录</div>'}
+</div>
+
+<!-- Recent Ideas -->
+<h2>💡 最近灵感</h2>
+<div class="timeline">
+  {''.join(f'<div class="timeline-item"><span class="ts">{i["ts"][:16]}</span><span class="type">{i["task"]}</span><span class="desc">{i["text"][:60]}</span><span class="proj">{i["project"]}</span></div>' for i in stats['recent_ideas'][:15])}
+  {'' if stats['recent_ideas'] else '<div style="color:#8b949e;text-align:center;padding:20px">暂无灵感记录</div>'}
+</div>
+
+<div style="text-align:center;color:{TEXT_MUTED};font-size:11px;margin-top:30px;padding:16px">
+  Personal OS Dashboard · 数据来源: analytics.db · 刷新: {now()}
+</div>
+</body>
+</html>"""
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Personal OS — 可视化仪表盘")
+    parser.add_argument("--no-open", action="store_true", help="只生成 HTML，不打开浏览器")
+    parser.add_argument("-p", "--project", help="按项目过滤")
+    parser.add_argument("-o", "--output", default=DASHBOARD_PATH, help="HTML 输出路径")
+    args = parser.parse_args()
+
+    init_db()
+    proj = args.project if args.project else None
+    stats = query_stats(project=proj)
+    html = gen_dashboard(stats, project=proj)
+
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    with open(args.output, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    print(f"✅ 仪表盘已生成: {args.output}")
+
+    if not args.no_open:
+        webbrowser.open("file://" + args.output)
+        print(f"📊 已在浏览器中打开")
+
+
+if __name__ == "__main__":
+    main()

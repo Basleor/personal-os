@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""
+Personal OS — xw-flow: 任务流转追踪查看器 (Layer 01)
+External drive: /Volumes/13384923891/hermes-agent/
+Placeholder — full implementation pending v2.2+ evolution.
+"""
+import sys
+sys.path.insert(0, "/Volumes/13384923891/hermes-agent/context-system")
+
+print("📊 任务流转追踪 (xw-flow)")
+print("━" * 50)
+print("  [v1.0] 核心占位符已部署 — 等待 detector/tracker 模块激活。")
+print("  [路线图] v2.2 将接入 analytics.db 中的任务切换日志，")
+print("           生成完整会话流转可视化图谱。")

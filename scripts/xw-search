@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""
+Personal OS — xw-search: 语义搜索工具 (Layer 01 Vector Search)
+External drive: /Volumes/13384923891/hermes-agent/
+v1.0 — TF-IDF + cosine similarity hybrid search.
+
+Usage:
+  xw-search "登录模块"              语义搜索 (向量优先，关键词兜底)
+  xw-search "登录模块" --keyword     纯关键词搜索
+  xw-search --rebuild               重建向量索引
+  xw-search --stats                 查看索引状态
+"""
+import sys
+sys.path.insert(0, "/Volumes/13384923891/hermes-agent/context-system")
+
+import argparse
+from core.db import init_db, get_connection
+from core.vector_search import (
+    search_all, search_keyword, rebuild_index, _ensure_vocab_table,
+)
+
+
+def cmd_search(query: str, keyword: bool = False, limit: int = 10):
+    """Execute search and print results."""
+    init_db()
+    if keyword:
+        results = search_keyword(query, limit=limit)
+        mode = "关键词"
+    else:
+        results = search_all(query, limit=limit)
+        mode = "语义"
+
+    if not results:
+        print(f" 🔍 {mode}搜索: \"{query}\"")
+        print("━" * 50)
+        print("  📭 未找到匹配结果。")
+        print("  提示: 试试不同的关键词，或先运行 xw-search --rebuild 重建索引。")
+        return
+
+    print(f" 🔍 {mode}搜索: \"{query}\" → {len(results)} 条结果")
+    print("━" * 60)
+    for i, r in enumerate(results, 1):
+        source = "💡" if r["source_table"] == "ideas" else "📋"
+        score_bar = "█" * min(int(r["score"] * 20), 20)
+        proj = r["meta"].get("project", "")
+        proj_tag = f" [{proj}]" if proj else ""
+        task_tag = f" {r['meta'].get('task_type', '')}"
+
+        print(f"  [{i}] {source} {r['text'][:100]}")
+        print(f"      相似度: {r['score']:.3f} {score_bar}{proj_tag}{task_tag}")
+        print()
+
+
+def cmd_rebuild():
+    """Rebuild the vector index."""
+    print("🗂️  正在重建向量索引...")
+    init_db()
+    vocab_size, indexed = rebuild_index()
+    print(f"✅ 索引重建完成")
+    print(f"   词汇量: {vocab_size} 个 token")
+    print(f"   已索引: {indexed} 条记录")
+    if indexed > 0:
+        print(f"   💡 现在可以用 xw-search \"关键词\" 进行语义搜索了")
+
+
+def cmd_stats():
+    """Show index statistics."""
+    init_db()
+    _ensure_vocab_table()
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM vector_vocab")
+    vocab = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM vector_index")
+    indexed = c.fetchone()[0]
+    c.execute("SELECT source_table, COUNT(*) FROM vector_index GROUP BY source_table")
+    breakdown = dict(c.fetchall())
+    conn.close()
+
+    print("📊 向量索引状态")
+    print("━" * 40)
+    print(f"  词汇量: {vocab} 个 token")
+    print(f"  已索引: {indexed} 条记录")
+    for table, cnt in breakdown.items():
+        print(f"    {table}: {cnt} 条")
+    if indexed == 0:
+        print("   💡 运行 xw-search --rebuild 来构建索引")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Personal OS — 语义搜索工具")
+    parser.add_argument("query", nargs="?", help="搜索关键词")
+    parser.add_argument("-k", "--keyword", action="store_true", help="使用纯关键词搜索")
+    parser.add_argument("-n", "--limit", type=int, default=10, help="最大结果数 (默认 10)")
+    parser.add_argument("--rebuild", action="store_true", help="重建向量索引")
+    parser.add_argument("--stats", action="store_true", help="查看索引状态")
+    args = parser.parse_args()
+
+    if args.rebuild:
+        cmd_rebuild()
+    elif args.stats:
+        cmd_stats()
+    elif args.query:
+        cmd_search(args.query, keyword=args.keyword, limit=args.limit)
+    else:
+        print("Personal OS — 语义搜索工具")
+        print()
+        print("Usage:")
+        print('  xw-search "关键词语义搜索"')
+        print("  xw-search --rebuild         重建索引")
+        print("  xw-search --stats           查看索引状态")
+        print('  xw-search "关键词" --keyword  纯关键词匹配')
+
+
+if __name__ == "__main__":
+    main()

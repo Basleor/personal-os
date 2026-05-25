@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""
+Personal OS — 全局快捷键守护进程 v2.1 (Global Hotkey Daemon)
+External drive: /Volumes/13384923891/hermes-agent/
+
+Reads popup_config.json for hotkey configuration.
+Launches xw-idea-popup via osascript to ensure GUI session access.
+Settings panel changes trigger daemon restart for instant hotkey reload.
+"""
+import sys
+import os
+import json
+import subprocess
+import signal
+import time
+import ctypes
+import ctypes.util
+from pathlib import Path
+
+HERMES_DRIVE = "/Volumes/13384923891/hermes-agent"
+PID_FILE = os.path.join(HERMES_DRIVE, "context-system", ".hotkey_daemon.pid")
+CONFIG_PATH = os.path.join(HERMES_DRIVE, "context-system", "popup_config.json")
+POPUP_SCRIPT = os.path.join(HERMES_DRIVE, "scripts", "xw-idea-popup")
+
+# ═══ Carbon Hotkey API ═══
+
+_carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library("Carbon"))
+
+kEventClassKeyboard = 0x6B657962
+kEventHotKeyPressed = 5
+
+cmdKey     = 1 << 8
+shiftKey   = 1 << 9
+optionKey  = 1 << 11
+controlKey = 1 << 12
+
+DEFAULT_KEYCODE = 34       # I
+DEFAULT_MODIFIERS = controlKey  # ⌃
+
+
+class EventHotKeyID(ctypes.Structure):
+    _fields_ = [("signature", ctypes.c_uint32), ("id", ctypes.c_uint32)]
+
+
+class EventTypeSpec(ctypes.Structure):
+    _fields_ = [("eventClass", ctypes.c_uint32), ("eventKind", ctypes.c_uint32)]
+
+
+EventHandlerProcPtr = ctypes.CFUNCTYPE(
+    ctypes.c_int32, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
+
+_carbon.RegisterEventHotKey.argtypes = [
+    ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+    ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_void_p)]
+_carbon.RegisterEventHotKey.restype = ctypes.c_int32
+
+_carbon.GetApplicationEventTarget.argtypes = []
+_carbon.GetApplicationEventTarget.restype = ctypes.c_void_p
+
+_carbon.UnregisterEventHotKey.argtypes = [ctypes.c_void_p]
+_carbon.UnregisterEventHotKey.restype = ctypes.c_int32
+
+_carbon.RunApplicationEventLoop.argtypes = []
+_carbon.RunApplicationEventLoop.restype = ctypes.c_int32
+
+_carbon.QuitApplicationEventLoop.argtypes = []
+_carbon.QuitApplicationEventLoop.restype = ctypes.c_int32
+
+_carbon.InstallEventHandler.argtypes = [
+    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32,
+    ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+_carbon.InstallEventHandler.restype = ctypes.c_int32
+
+_carbon.RemoveEventHandler.argtypes = [ctypes.c_void_p]
+_carbon.RemoveEventHandler.restype = ctypes.c_int32
+
+
+def load_config():
+    try:
+        with open(CONFIG_PATH, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def launch_popup():
+    """Launch the popup via bash directly — no Terminal window needed.
+    The popup script uses native AppleScript dialog which always renders."""
+    try:
+        subprocess.Popen(
+            ["/bin/bash", POPUP_SCRIPT],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:
+        pass  # silently ignore popup launch failures
+
+
+def run_daemon():
+    cfg = load_config()
+    gh = cfg.get("global_hotkey", {})
+    keycode = gh.get("key_code", DEFAULT_KEYCODE)
+    modifiers = gh.get("modifiers", DEFAULT_MODIFIERS)
+    display = gh.get("display", "⌃I")
+
+    print(f"⚡ 全局快捷键守护进程 v2.1")
+    print(f"   快捷键: {display}  →  灵感便签")
+    print(f"   PID: {os.getpid()}")
+
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+    target = _carbon.GetApplicationEventTarget()
+    hotkey_id = EventHotKeyID(0x504F5301, 1)
+    hotkey_ref = ctypes.c_void_p()
+    handler_ref = ctypes.c_void_p()
+
+    # Register hotkey with retry
+    max_retries = 3
+    for attempt in range(max_retries):
+        ret = _carbon.RegisterEventHotKey(keycode, modifiers,
+                                          ctypes.byref(hotkey_id),
+                                          target, 0, ctypes.byref(hotkey_ref))
+        if ret == 0:
+            break
+        print(f"⚠️  注册全局快捷键失败 (错误码: {ret})，重试 {attempt+1}/{max_retries}...")
+        time.sleep(0.5)
+    else:
+        print(f"❌ 注册全局快捷键失败")
+        print(f"   请授予辅助功能权限：")
+        print(f"   系统设置 → 隐私与安全性 → 辅助功能 → Terminal")
+        if os.path.exists(PID_FILE):
+            os.unlink(PID_FILE)
+        return 1
+
+    @EventHandlerProcPtr
+    def hotkey_handler(call_ref, event_ref, user_data):
+        try:
+            launch_popup()
+        except Exception:
+            pass  # silently ignore popup launch failures
+        return 0
+
+    event_type = EventTypeSpec(kEventClassKeyboard, kEventHotKeyPressed)
+    _carbon.InstallEventHandler(target, hotkey_handler, 1,
+                                ctypes.byref(event_type), None,
+                                ctypes.byref(handler_ref))
+
+    # Handle SIGTERM for clean shutdown
+    def _on_term(signum, frame):
+        _carbon.QuitApplicationEventLoop()
+
+    signal.signal(signal.SIGTERM, _on_term)
+    signal.signal(signal.SIGINT, _on_term)
+
+    _carbon.RunApplicationEventLoop()
+
+    # Cleanup
+    _carbon.UnregisterEventHotKey(hotkey_ref)
+    _carbon.RemoveEventHandler(handler_ref)
+    if os.path.exists(PID_FILE):
+        os.unlink(PID_FILE)
+
+    return 0
+
+
+def stop_daemon():
+    if not os.path.exists(PID_FILE):
+        print("❌ 守护进程未运行")
+        return 1
+    with open(PID_FILE) as f:
+        pid = int(f.read().strip())
+    try:
+        os.kill(pid, signal.SIGTERM)
+        print(f"🛑 守护进程已停止 (PID: {pid})")
+    except (ProcessLookupError, PermissionError) as e:
+        print(f"⚠️  {e}")
+    if os.path.exists(PID_FILE):
+        os.unlink(PID_FILE)
+
+
+def status_daemon():
+    if not os.path.exists(PID_FILE):
+        print("🔴 守护进程未运行")
+        return
+    with open(PID_FILE) as f:
+        pid = int(f.read().strip())
+    try:
+        os.kill(pid, 0)
+        cfg = load_config()
+        gh = cfg.get("global_hotkey", {})
+        print(f"🟢 守护进程运行中 (PID: {pid})")
+        print(f"   快捷键: {gh.get('display', '⌃I')}")
+    except (ProcessLookupError, PermissionError):
+        print(f"🔴 守护进程未运行 (stale PID)")
+        if os.path.exists(PID_FILE):
+            os.unlink(PID_FILE)
+
+
+def install_launchd():
+    label = "com.personal-os.hotkey-daemon"
+    plist = f'''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>Label</key><string>{label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>{os.path.abspath(__file__)}</string>
+        <string>start</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+</dict></plist>'''
+
+    plist_path = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
+    os.makedirs(os.path.dirname(plist_path), exist_ok=True)
+    with open(plist_path, "w") as f:
+        f.write(plist)
+
+    subprocess.run(["launchctl", "unload", plist_path],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["launchctl", "load", plist_path],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    print(f"✅ 已安装开机自启: {plist_path}")
+    print(f"   ⚠️ 首次使用需授予辅助功能权限")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: xw-hotkey {start|stop|status|install}")
+        sys.exit(1)
+
+    cmd = sys.argv[1]
+    if cmd == "start":
+        sys.exit(run_daemon())
+    elif cmd == "stop":
+        stop_daemon()
+    elif cmd == "status":
+        status_daemon()
+    elif cmd == "install":
+        install_launchd()
+    else:
+        print(f"Unknown: {cmd}")
+        sys.exit(1)

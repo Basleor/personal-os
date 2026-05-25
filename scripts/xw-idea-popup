@@ -1,0 +1,36 @@
+#!/bin/bash
+# Personal OS — 灵感便签 v4.1
+# ⌃I → 输入 → Enter 捕获 → ✓ 确认自动消失
+# 纯键盘操作，零鼠标
+
+DRIVE="/Volumes/13384923891/hermes-agent"
+CFG="$DRIVE/context-system/popup_config.json"
+SESSION="${HERMES_SESSION_ID:-BOOT_SESSION}"
+
+# ── Step 1: 输入对话框 → Enter = 捕获, Esc = 放弃 ──
+RESULT=$(osascript 2>/dev/null <<'EOF'
+display dialog "写下此刻的想法……" \
+    with title "🪐 灵感捕获" \
+    default answer "" \
+    buttons {"放弃", "捕获"} \
+    default button "捕获" \
+    cancel button "放弃"
+EOF
+)
+
+# 点"放弃"或 Esc → 退出
+if ! echo "$RESULT" | grep -q "text returned:"; then
+    exit 0
+fi
+
+# ── Step 2: 提取文字并写入数据库 ──
+IDEA=$(echo "$RESULT" | sed -n 's/.*text returned:\(.*\), button returned:捕获.*/\1/p')
+[ -z "$IDEA" ] && exit 0
+
+RID=$(python3 -c "
+import sys; sys.path.insert(0,'$DRIVE/context-system')
+from core.ideas import capture_idea
+print(capture_idea('$SESSION','📋 通用','''${IDEA}'''))")
+
+# ── Step 3: 确认 → 1.5秒自动消失 ──
+osascript -e "display dialog \"✓ 已捕获 #${RID}\" with title \"🪐\" buttons {} giving up after 1.5" 2>/dev/null &

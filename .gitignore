@@ -1,0 +1,30 @@
+# Personal OS — .gitignore
+# 代码层和数据库/配置层严格分离
+
+# 敏感配置（含 API key）
+config.yaml
+.env
+popup_config.json
+
+# 个人数据库（行为数据、灵感碎片）
+*.db
+*.sqlite
+
+# 缝合报告（个人内容）
+Whiteboard/
+!Whiteboard/.gitkeep
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+__pycache__/
+*.pyc
+
+# 临时文件
+.flush_prompt.md

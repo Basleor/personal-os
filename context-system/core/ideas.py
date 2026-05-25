@@ -24,12 +24,14 @@ def _ensure_db():
     init_db()
 
 
-def capture_idea(session_id: str, task_type: str, text: str, project: str = "") -> int:
+def capture_idea(session_id: str, task_type: str, text: str, project: str = "", source: str = "popup") -> int:
     """Capture a fragment idea and persist to the external drive database.
+    
+    source: 'popup' (⌃I), 'cli' (xw idea), 'reflect' (深度反思)
     Returns the new idea's row id."""
     _ensure_db()
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
-    return insert_idea(ts, session_id, task_type, text, project)
+    return insert_idea(ts, session_id, task_type, text, project, source)
 
 
 def get_pending_ideas(limit: int = 100, project: Optional[str] = None) -> list:

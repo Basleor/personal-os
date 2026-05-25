@@ -25,7 +25,7 @@ from core.ideas import capture_idea, get_pending_ideas, generate_flush_report, p
 
 def cmd_capture(text: str, project: str = ""):
     """Capture a fragment idea."""
-    row_id = capture_idea(CURRENT_SESSION, CURRENT_TASK, text, project)
+    row_id = capture_idea(CURRENT_SESSION, CURRENT_TASK, text, project, 'cli')
     proj_tag = f" [{project}]" if project else ""
     print(f" 📥 灵感已捕获 [{CURRENT_TASK}]{proj_tag}")
     print(f"    ID: {row_id} | Session: {CURRENT_SESSION}")

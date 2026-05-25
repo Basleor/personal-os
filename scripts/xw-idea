@@ -56,7 +56,12 @@ def cmd_flush():
     # ── Step 1: Prepare rich context for LLM stitching ──
     context = prepare_flush_context()
     prompt_text = context["prompt_text"]
-    meta_count = len(context["meta_goals"])
+    # Count unique meta goals across all sessions
+    all_meta_goals = set()
+    for sid, summary in context.get("sessions", {}).items():
+        for mg in summary.get("meta_goals", []):
+            all_meta_goals.add(mg)
+    meta_count = len(all_meta_goals)
 
     prompt_path = "/Volumes/13384923891/hermes-agent/context-system/Whiteboard/.flush_prompt.md"
     with open(prompt_path, 'w', encoding='utf-8') as f:

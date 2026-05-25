@@ -9,6 +9,7 @@ import os
 
 from typing import Optional
 from datetime import datetime, timedelta
+from collections import defaultdict
 from core.db import (
     init_db, insert_idea, get_pending_ideas as db_get_pending,
     mark_ideas_flushed as db_mark_flushed, get_idea_stats,
@@ -146,37 +147,35 @@ tags: [灵感, {task.replace(' ', '-')}]
 
 
 def prepare_flush_context() -> dict:
-    """Prepare rich context for LLM semantic stitching.
+    """方案 B: 关联度比对缝合引擎。
 
-    For each pending idea, finds the closest session_task within ±60 minutes
-    to establish the "birth soil" — what the user was doing and why.
+    为每个灵感收集时间窗口内**所有**候选任务（而非只取最近一条），
+    同时汇总所有活跃会话及其元目标。LLM 在缝合时自行判断：
+    1. 碎片之间按内容相似度聚类
+    2. 每个聚类与哪个会话上下文关联度最高
+    3. 无法匹配的标为孤岛
 
     Returns:
         {
-            "ideas": [...],           # list of (id, ts, session, task, raw) tuples
-            "task_context": {...},    # idea_id -> {task_type, description, event_note}
-            "meta_goals": [...],      # unique event_notes (deduped)
-            "prompt_text": "..."      # natural-language prompt ready for LLM
+            "ideas": [...],              # pending 灵感列表
+            "sessions": {...},           # session_id → {task_count, meta_goals, timeline}
+            "idea_contexts": {...},      # idea_id → [候选任务列表]
+            "prompt_text": "..."         # 含聚类指令的完整 prompt
         }
     """
     ideas = get_pending_ideas()
     if not ideas:
-        return {"ideas": [], "task_context": {}, "meta_goals": [], "prompt_text": ""}
+        return {"ideas": [], "sessions": {}, "idea_contexts": {}, "prompt_text": ""}
 
     WINDOW_MINUTES = 60
-    task_context = {}
-    meta_goals_set = set()
+    idea_contexts = {}
+    all_sessions = defaultdict(lambda: {"tasks": [], "meta_goals": set(), "task_types": set()})
 
     for idea_id, ts, sess, task, raw in ideas:
-        # Parse idea timestamp and compute window
         try:
             idea_dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
         except ValueError:
-            task_context[idea_id] = {
-                "task_type": task,
-                "description": "",
-                "event_note": "",
-            }
+            idea_contexts[idea_id] = []
             continue
 
         window_start = (idea_dt - timedelta(minutes=WINDOW_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
@@ -184,92 +183,125 @@ def prepare_flush_context() -> dict:
 
         candidates = get_session_tasks_in_window(window_start, window_end)
 
-        if not candidates:
-            task_context[idea_id] = {
-                "task_type": task,
-                "description": "",
-                "event_note": "",
-            }
-            continue
-
-        # Find the closest task by time delta
-        best = None
-        best_delta = None
+        # 按 session 分组候选任务
+        idea_contexts[idea_id] = []
         for row in candidates:
-            try:
-                row_dt = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                continue
-            delta = abs((idea_dt - row_dt).total_seconds())
-            if best is None or delta < best_delta:
-                best = row
-                best_delta = delta
+            sid = row["session_id"] or "unknown"
+            ctx = {
+                "session_id": sid,
+                "timestamp": row["timestamp"],
+                "task_type": row["task_type"] or "📋 通用",
+                "description": row["description"] or "",
+                "event_note": row["event_note"] or "",
+            }
+            idea_contexts[idea_id].append(ctx)
 
-        ctx = {
-            "task_type": best["task_type"] or task,
-            "description": best["description"] or "",
-            "event_note": best["event_note"] or "",
+            # 累积到会话汇总
+            all_sessions[sid]["tasks"].append(row["timestamp"])
+            all_sessions[sid]["task_types"].add(ctx["task_type"])
+            note = ctx["event_note"] or ctx["description"]
+            if note:
+                all_sessions[sid]["meta_goals"].add(note)
+
+    # ── 整理会话汇总 ──
+    sessions_summary = {}
+    for sid, data in all_sessions.items():
+        tasks_sorted = sorted(data["tasks"])
+        sessions_summary[sid] = {
+            "task_count": len(tasks_sorted),
+            "first_task": tasks_sorted[0] if tasks_sorted else "",
+            "last_task": tasks_sorted[-1] if tasks_sorted else "",
+            "task_types": sorted(data["task_types"]),
+            "meta_goals": sorted(data["meta_goals"]),
         }
-        task_context[idea_id] = ctx
 
-        # Use description as fallback when event_note is empty
-        meta_goal = ctx["event_note"] or ctx["description"]
-        if meta_goal:
-            meta_goals_set.add(meta_goal)
-
-    meta_goals = sorted(meta_goals_set)
-
-    # ── Build the natural-language prompt ──
+    # ── 生成方案 B 专有的 LLM prompt ──
     prompt_lines = [
-        "你是 Personal OS 的灵感缝合引擎。",
+        "你是 Personal OS 的灵感缝合引擎（方案 B：关联度比对模式）。",
         "",
-        "用户在过去一段时间内积累了一些灵感碎片，每条碎片产生于特定的任务上下文中。",
-        "请从两个层面分析这些碎片：",
+        "## 核心逻辑",
+        "你有三类数据：灵感碎片本身、每条碎片时间窗口内的候选任务、以及各活跃会话的元目标。",
+        "请按以下步骤分析：",
         "",
-        "## 层面 1：任务上下文",
-        "每条碎片产生时，用户正在做什么？这解释了碎片为什么会出现。",
+        "### 步骤 1：碎片聚类",
+        "按内容相似度将碎片分组（不看任务类型标签，看语义）。",
+        "例如「Obsidian 链接」「双向链接」「知识图谱」→ 聚类为「知识管理」。",
         "",
-        "## 层面 2：元目标",
-        "这些任务最终是为了什么？站在更高层面，这些碎片指向什么方向？",
+        "### 步骤 2：会话匹配",
+        "每个聚类与下方列出的各会话上下文比对，选关联度最高的归属。",
+        "判断标准：聚类的主题是否与该会话的元目标一致？",
+        "一个聚类可以匹配多个会话（如果确实跨会话），但必须说明理由。",
         "",
-        "## 你要做的",
-        "1. 按主题将碎片分组（不是按任务类型，是按内在关联）",
-        "2. 发现碎片之间的隐藏联系",
-        "3. 结合元目标，提出可执行的行动建议",
-        '4. 标注"孤岛碎片"（暂时找不到关联的）',
+        "### 步骤 3：孤岛判定",
+        "无法匹配到任何会话上下文、或内容与其他碎片无关联的 → 标为「孤岛」。",
         "",
-        "## 碎片数据",
+        "## 活跃会话",
         "",
     ]
 
-    for idea_id, ts, sess, task, raw in ideas:
-        ctx = task_context.get(idea_id, {})
-        meta_goal = ctx.get("event_note") or ctx.get("description") or "(未关联元目标)"
-
-        prompt_lines.append(f"### 碎片 #{idea_id}")
-        prompt_lines.append(f"- **灵感内容:** {raw}")
-        prompt_lines.append(f"- **捕获时间:** {ts}")
-        prompt_lines.append(f"- **任务类型:** {ctx.get('task_type', task)}")
-        prompt_lines.append(f"- **任务描述:** {ctx.get('description') or '(无)'}")
-        prompt_lines.append(f"- **元目标:** {meta_goal}")
-        prompt_lines.append("")
-
-    if meta_goals:
-        prompt_lines.append("## 元目标汇总")
-        for mg in meta_goals:
-            prompt_lines.append(f"- {mg}")
+    for sid, summary in sessions_summary.items():
+        prompt_lines.append(f"### 会话: {sid}")
+        prompt_lines.append(f"- 活跃时段: {summary['first_task'][:16]} → {summary['last_task'][:16]}")
+        prompt_lines.append(f"- 任务类型: {', '.join(summary['task_types'])}")
+        if summary["meta_goals"]:
+            prompt_lines.append(f"- 元目标:")
+            for mg in summary["meta_goals"]:
+                prompt_lines.append(f"  - {mg}")
         prompt_lines.append("")
 
     prompt_lines.extend([
-        "## 灵感清单",
-        "---",
+        "## 碎片及候选上下文",
+        "",
+    ])
+
+    for idea_id, ts, sess, task, raw in ideas:
+        prompt_lines.append(f"### 碎片 #{idea_id}: {raw}")
+        prompt_lines.append(f"*捕获时间: {ts}*")
+        prompt_lines.append("")
+
+        candidates = idea_contexts.get(idea_id, [])
+        if not candidates:
+            prompt_lines.append("  ⚠ 无关联任务（孤岛候选）")
+            prompt_lines.append("")
+            continue
+
+        # 按 session 分组显示
+        by_session = defaultdict(list)
+        for c in candidates:
+            by_session[c["session_id"]].append(c)
+
+        for sid, tasks in by_session.items():
+            prompt_lines.append(f"  **会话 {sid}** 中的任务:")
+            for t in tasks[:3]:  # 最多显示 3 条
+                note = t["event_note"] or t["description"]
+                prompt_lines.append(f"  - [{t['timestamp'][:16]}] {t['task_type']} {note}")
+            if len(tasks) > 3:
+                prompt_lines.append(f"  - ... 还有 {len(tasks)-3} 条任务")
+        prompt_lines.append("")
+
+    prompt_lines.extend([
+        "## 输出格式",
+        "请按以下结构输出你的分析：",
+        "",
+        "### 聚类 1: [主题名]",
+        "- 归属会话: [session_id]（关联度: 高/中/低，理由: ...）",
+        "- 包含碎片: #1, #3, #5",
+        "- 关联元目标: ...",
+        "- 分析: ...",
+        "",
+        "### 孤岛碎片",
+        "- #7: [为什么孤立]",
+        "",
+        "### 行动建议",
+        "1. ...",
+        "2. ...",
     ])
 
     prompt_text = "\n".join(prompt_lines)
 
     return {
         "ideas": ideas,
-        "task_context": task_context,
-        "meta_goals": meta_goals,
+        "sessions": sessions_summary,
+        "idea_contexts": idea_contexts,
         "prompt_text": prompt_text,
     }

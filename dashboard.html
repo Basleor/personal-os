@@ -3,737 +3,933 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Personal OS Dashboard</title>
+<title>Personal OS Dashboard v2</title>
 <style>
 :root {
-  --bg: #1a1a2e;
-  --card-bg: #16213e;
+  --bg: #0f0f1a;
+  --card: #1a1a2e;
   --border: #2a2a4a;
   --gold: #FFD700;
   --orange: #FF6B35;
   --cream: #FEF9EF;
   --text: #e0e0e0;
   --muted: #8892a4;
-  --green: #3fb950;
-  --blue: #58a6ff;
-  --purple: #bc8cff;
+  --green: #27AE60;
+  --blue: #3498DB;
+  --purple: #6C5CE7;
   --radius: 12px;
+  --nav-h: 52px;
+  --status-h: 32px;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-html { scroll-behavior:smooth; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  font-family: system-ui, "PingFang SC", -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+  overflow-x: hidden;
 }
-.container { max-width: 960px; margin: 0 auto; padding: 40px 24px 60px; }
 
-/* ── Section titles ── */
-.section-title {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--muted);
-  margin: 48px 0 16px;
-  padding-bottom: 8px;
+/* ── Top Nav ── */
+.topnav {
+  position: sticky; top: 0; z-index: 100;
+  height: var(--nav-h);
+  background: rgba(15,15,26,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 24px;
+  gap: 4px;
 }
-
-/* ── Header ── */
-.header {
-  text-align: center;
-  padding: 24px 0 32px;
-}
-.header h1 {
-  font-size: 36px;
-  font-weight: 700;
+.topnav .logo {
+  font-size: 14px; font-weight: 700;
   background: linear-gradient(135deg, var(--gold), var(--orange));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 6px;
+  margin-right: 24px;
+  white-space: nowrap;
 }
-.header .version {
-  display: inline-block;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 3px 14px;
-  font-size: 12px;
+.topnav .tab-btn {
+  position: relative;
+  background: none; border: none;
   color: var(--muted);
-  margin: 6px 0;
+  font-size: 13px; font-weight: 500;
+  padding: 8px 16px; cursor: pointer;
+  transition: color .25s;
+  font-family: inherit;
+  border-radius: 6px;
 }
-.header .slogan {
-  font-size: 15px;
-  color: var(--muted);
-  margin-top: 8px;
-  font-style: italic;
+.topnav .tab-btn:hover { color: var(--text); background: rgba(255,255,255,.04); }
+.topnav .tab-btn.active { color: var(--gold); }
+.topnav .tab-btn.active::after {
+  content: "";
+  position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%);
+  width: 24px; height: 3px;
+  background: var(--gold); border-radius: 2px;
+  transition: width .25s;
 }
-.header .generated {
-  font-size: 11px;
-  color: #555;
-  margin-top: 8px;
+.topnav .version-badge {
+  margin-left: auto;
+  font-size: 10px; color: var(--muted);
+  background: var(--card); border: 1px solid var(--border);
+  padding: 3px 10px; border-radius: 12px;
 }
 
-/* ── Stats cards ── */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
-  margin: 12px 0;
+/* ── Main Content ── */
+.main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px 60px;
+  min-height: calc(100vh - var(--nav-h) - var(--status-h) - 1px);
 }
-.card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 18px 16px;
-  transition: border-color .2s, transform .2s;
+
+/* ── Tab Panels ── */
+.tab-panel {
+  display: none;
+  animation: slideIn .35s ease;
 }
-.card:hover {
-  border-color: var(--gold);
-  transform: translateY(-2px);
+.tab-panel.active { display: block; }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.card .num {
-  font-size: 34px;
-  font-weight: 700;
-  color: var(--gold);
-  line-height: 1.1;
-}
-.card .num.orange { color: var(--orange); }
-.card .num.green { color: var(--green); }
-.card .num.blue { color: var(--blue); }
-.card .label {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-.card .sub {
-  font-size: 11px;
-  color: #555;
-  margin-top: 2px;
+
+/* ── Section Header ── */
+.section-hd {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--muted); padding: 32px 0 16px;
 }
 
 /* ── Architecture SVG ── */
 .arch-wrap {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px 16px 16px;
-  overflow-x: auto;
+  position: relative;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px 16px 16px; overflow: hidden;
 }
 .arch-wrap svg { display: block; margin: 0 auto; }
+.arch-layer { cursor: pointer; transition: filter .2s; }
+.arch-layer:hover { filter: brightness(1.15); }
+.arch-layer rect { transition: stroke .25s, fill .25s; }
+.arch-layer:hover rect { stroke-opacity: 1 !important; }
 
-/* ── Commands panel ── */
-.cmds {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+@keyframes pulse-flow {
+  0%, 100% { stroke-opacity: 0.3; }
+  50% { stroke-opacity: 0.9; }
 }
-.cmd-group { border-bottom: 1px solid var(--border); }
-.cmd-group:last-child { border-bottom: none; }
-.cmd-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 14px 18px;
-  cursor: pointer;
-  user-select: none;
-  transition: background .15s;
+@keyframes breathe {
+  0%, 100% { r: 5; opacity: 0.8; }
+  50% { r: 7; opacity: 1; }
 }
-.cmd-header:hover { background: rgba(255,255,255,.03); }
-.cmd-header .layer-tag {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.cmd-header .layer-tag.l1 { background: #3fb95022; color: var(--green); }
-.cmd-header .layer-tag.l2 { background: #58a6ff22; color: var(--blue); }
-.cmd-header .layer-tag.l3 { background: #bc8cff22; color: var(--purple); }
-.cmd-header .layer-tag.l4 { background: #f0c04022; color: var(--gold); }
-.cmd-header .layer-tag.l5 { background: #ff6b3522; color: var(--orange); }
-.cmd-header .group-name { font-size: 13px; font-weight: 600; flex:1; }
-.cmd-header .chevron {
-  font-size: 11px; color: var(--muted);
-  transition: transform .2s;
-}
-.cmd-group.open .cmd-header .chevron { transform: rotate(90deg); }
-.cmd-body {
-  display: none;
-  padding: 0 18px 14px;
-}
-.cmd-group.open .cmd-body { display: block; }
-.cmd-row {
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 5px 0;
-  font-size: 13px;
-  font-family: "SF Mono", "Menlo", "Monaco", monospace;
-}
-.cmd-row .cmd-name {
-  color: var(--gold);
-  font-weight: 600;
-  min-width: 130px;
-}
-.cmd-row .cmd-arrow { color: var(--muted); font-size: 11px; }
-.cmd-row .cmd-desc { color: var(--muted); }
+.data-flow { animation: pulse-flow 3s ease-in-out infinite; }
+.data-flow:nth-child(2) { animation-delay: 1.5s; }
+.breathe-dot { animation: breathe 2s ease-in-out infinite; }
+.breathe-dot.d2 { animation-delay: 1s; }
 
-/* ── Principles ── */
-.principles {
+/* ── Detail Panel (slide-out) ── */
+.detail-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); z-index: 200;
+  opacity: 0; pointer-events: none;
+  transition: opacity .3s;
+}
+.detail-overlay.open { opacity: 1; pointer-events: auto; }
+.detail-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 90vw;
+  background: var(--card); border-left: 1px solid var(--border);
+  z-index: 201; padding: 28px 24px;
+  transform: translateX(100%);
+  transition: transform .35s cubic-bezier(.4,0,.2,1);
+  overflow-y: auto;
+}
+.detail-panel.open { transform: translateX(0); }
+.detail-panel .close-btn {
+  position: absolute; top: 16px; right: 16px;
+  background: none; border: none; color: var(--muted);
+  font-size: 20px; cursor: pointer; width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; transition: background .15s;
+}
+.detail-panel .close-btn:hover { background: rgba(255,255,255,.08); }
+.detail-panel .dl-tag {
+  display: inline-block; padding: 3px 10px; border-radius: 10px;
+  font-size: 10px; font-weight: 600; margin-bottom: 12px;
+}
+.detail-panel h3 { font-size: 20px; margin-bottom: 6px; }
+.detail-panel .dl-status {
+  font-size: 12px; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;
+}
+.detail-panel .dl-status .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.detail-panel .dl-desc { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 20px; }
+.detail-panel .dl-section { margin-bottom: 18px; }
+.detail-panel .dl-section h4 {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); margin-bottom: 8px;
+}
+.detail-panel .dl-comp {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0;
+  font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.03);
+}
+.detail-panel .dl-comp .c-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.detail-panel .dl-comp .c-status {
+  font-size: 10px; padding: 1px 6px; border-radius: 8px;
+  margin-left: auto; flex-shrink: 0;
+}
+
+/* ── Stat Cards ── */
+.cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
+  margin-top: 12px;
 }
-.principle {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  transition: border-color .2s;
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px 18px; cursor: default;
+  transition: transform .25s, box-shadow .25s, border-color .25s;
 }
-.principle:hover { border-color: var(--orange); }
-.principle .p-num {
-  display: inline-block;
-  width: 26px; height: 26px;
-  background: var(--orange);
-  color: #fff;
-  border-radius: 50%;
-  text-align: center;
-  line-height: 26px;
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 8px;
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  border-color: var(--gold);
 }
-.principle .p-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-.principle .p-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.card .num {
+  font-size: 38px; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; font-family: "SF Mono","Menlo","Monaco",monospace;
+}
+.card .num.gold { color: var(--gold); }
+.card .num.orange { color: var(--orange); }
+.card .num.green { color: var(--green); }
+.card .num.blue { color: var(--blue); }
+.card .num.purple { color: var(--purple); }
+.card .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.card .sub { font-size: 11px; color: #555; margin-top: 2px; }
 
-/* ── Roadmap ── */
-.roadmap {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-@media (max-width: 640px) { .roadmap { grid-template-columns: 1fr; } }
-.roadmap-col {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 18px;
-}
-.roadmap-col h3 {
-  font-size: 13px;
-  margin-bottom: 10px;
+/* ── Ideas Preview ── */
+.ideas-preview { margin-top: 24px; }
+.ideas-preview h3 {
+  font-size: 13px; color: var(--muted); margin-bottom: 10px;
   display: flex; align-items: center; gap: 6px;
 }
-.roadmap-col ul {
-  list-style: none;
-  font-size: 12px;
-  color: var(--muted);
+.idea-chip {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 8px;
+  transition: border-color .2s;
 }
-.roadmap-col li { padding: 4px 0; }
-.roadmap-col li::before { content: "▸ "; color: var(--orange); }
+.idea-chip:hover { border-color: var(--orange); }
+.idea-chip .i-date { font-size: 10px; color: var(--orange); margin-bottom: 2px; }
+.idea-chip .i-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+.idea-chip .i-tags { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
-/* ── Seeds ── */
-.seed-list {
-  display: flex; flex-direction: column; gap: 8px;
+/* ── Timeline ── */
+.timeline {
+  position: relative; padding: 12px 0 12px 28px;
+  margin-top: 8px;
 }
-.seed-item {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  display: flex; align-items: flex-start; gap: 12px;
+.timeline::before {
+  content: "";
+  position: absolute; left: 8px; top: 0; bottom: 0;
+  width: 2px; background: linear-gradient(to bottom, var(--gold), var(--purple), var(--border));
 }
-.seed-item .seed-dot {
-  width: 8px; height: 8px;
-  background: var(--orange);
-  border-radius: 50%;
-  margin-top: 5px;
-  flex-shrink: 0;
+.tl-node {
+  position: relative; margin-bottom: 20px;
+  opacity: 0; transform: translateY(16px);
+  transition: opacity .5s ease, transform .5s ease;
 }
-.seed-item .seed-tags {
-  font-size: 10px;
-  color: var(--orange);
-  margin-bottom: 2px;
+.tl-node.visible { opacity: 1; transform: translateY(0); }
+.tl-node::before {
+  content: "";
+  position: absolute; left: -24px; top: 6px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--border);
+  transition: border-color .25s, background .25s, box-shadow .25s;
+  z-index: 2;
 }
-.seed-item .seed-text {
-  font-size: 13px;
-  color: var(--text);
-  line-height: 1.5;
+.tl-node.current::before {
+  border-color: var(--gold); background: var(--gold);
+  box-shadow: 0 0 12px rgba(255,215,0,.5);
+  animation: pulse-dot 2s ease-in-out infinite;
 }
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 8px rgba(255,215,0,.4); }
+  50% { box-shadow: 0 0 20px rgba(255,215,0,.8); }
+}
+.tl-header {
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer; user-select: none;
+  padding: 8px 12px; border-radius: 8px;
+  transition: background .15s;
+}
+.tl-header:hover { background: rgba(255,255,255,.03); }
+.tl-version {
+  font-size: 14px; font-weight: 700; color: var(--gold);
+  font-family: "SF Mono","Menlo","Monaco",monospace;
+}
+.tl-date {
+  font-size: 11px; color: var(--muted);
+}
+.tl-current-badge {
+  font-size: 9px; background: var(--gold); color: #000;
+  padding: 1px 6px; border-radius: 8px; font-weight: 600;
+}
+.tl-chevron {
+  font-size: 10px; color: var(--muted); margin-left: auto;
+  transition: transform .3s;
+}
+.tl-node.expanded .tl-chevron { transform: rotate(180deg); }
+.tl-body {
+  max-height: 0; overflow: hidden;
+  transition: max-height .4s ease, padding .4s ease;
+  padding: 0 12px;
+}
+.tl-node.expanded .tl-body {
+  max-height: 300px; padding: 8px 12px 12px;
+}
+.tl-change {
+  font-size: 12px; color: var(--muted); line-height: 1.6;
+  padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.03);
+}
+.tl-change:last-child { border-bottom: none; }
+.tl-tag {
+  display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 4px;
+  margin-right: 4px; font-weight: 600;
+}
+.tl-tag.kernel { background: #3498DB22; color: var(--blue); }
+.tl-tag.ideas { background: #FFD70022; color: var(--gold); }
+.tl-tag.bridge { background: #27AE6022; color: var(--green); }
+.tl-tag.mirror { background: #6C5CE722; color: var(--purple); }
+.tl-tag.agent { background: #FF6B3522; color: var(--orange); }
+.tl-tag.infra { background: #8892a422; color: var(--muted); }
 
-/* ── Path refs ── */
-.paths {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  font-family: "SF Mono", "Menlo", "Monaco", monospace;
-  font-size: 12px;
+/* ── Commands Tab ── */
+.cmd-search {
+  width: 100%; padding: 10px 16px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-size: 13px; outline: none;
+  margin: 8px 0 16px;
+  transition: border-color .25s;
+  font-family: inherit;
 }
-.paths .path-row {
-  display: flex; gap: 12px;
-  padding: 5px 0;
-  border-bottom: 1px solid rgba(255,255,255,.03);
+.cmd-search:focus { border-color: var(--gold); }
+.cmd-search::placeholder { color: #555; }
+.cmd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
 }
-.paths .path-row:last-child { border-bottom: none; }
-.paths .path-icon { width: 20px; text-align: center; flex-shrink: 0; }
-.paths .path-dir { color: var(--blue); min-width: 200px; }
-.paths .path-desc { color: var(--muted); }
-
-/* ── Footer ── */
-.footer {
-  text-align: center;
-  color: #444;
-  font-size: 11px;
-  margin-top: 48px;
+.cmd-card {
+  perspective: 600px;
+  height: 120px;
+}
+.cmd-card-inner {
+  position: relative; width: 100%; height: 100%;
+  transition: transform .45s ease;
+  transform-style: preserve-3d;
+}
+.cmd-card:hover .cmd-card-inner { transform: rotateY(180deg); }
+.cmd-face {
+  position: absolute; inset: 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 16px;
+  backface-visibility: hidden;
+  display: flex; flex-direction: column;
+}
+.cmd-face.front { justify-content: center; }
+.cmd-face.back {
+  transform: rotateY(180deg);
+  justify-content: center; overflow-y: auto;
+}
+.cmd-face .cmd-lname {
+  font-size: 14px; font-weight: 600; margin-bottom: 4px;
+  font-family: "SF Mono","Menlo","Monaco",monospace;
+}
+.cmd-face .cmd-lname.l1 { color: var(--blue); }
+.cmd-face .cmd-lname.l2 { color: var(--gold); }
+.cmd-face .cmd-lname.l3 { color: var(--green); }
+.cmd-face .cmd-lname.l4 { color: var(--purple); }
+.cmd-face .cmd-lname.l5 { color: var(--muted); }
+.cmd-face .cmd-brief { font-size: 11px; color: var(--muted); }
+.cmd-face .cmd-layer-badge {
+  position: absolute; top: 10px; right: 12px;
+  font-size: 9px; padding: 1px 6px; border-radius: 8px; font-weight: 600;
+}
+.cmd-layer-badge.bl1 { background: #3498DB22; color: var(--blue); }
+.cmd-layer-badge.bl2 { background: #FFD70022; color: var(--gold); }
+.cmd-layer-badge.bl3 { background: #27AE6022; color: var(--green); }
+.cmd-layer-badge.bl4 { background: #6C5CE722; color: var(--purple); }
+.cmd-layer-badge.bl5 { background: #8892a422; color: var(--muted); }
+.cmd-face.back .cmd-usage {
+  font-size: 11px; color: var(--muted); line-height: 1.6;
+}
+.cmd-face.back .cmd-usage code {
+  color: var(--gold); font-family: "SF Mono","Menlo","Monaco",monospace;
+  font-size: 11px; background: rgba(255,215,0,.06); padding: 1px 4px; border-radius: 3px;
+}
+
+/* ── Bottom Status Bar ── */
+.statusbar {
+  position: sticky; bottom: 0; z-index: 100;
+  height: var(--status-h);
+  background: rgba(15,15,26,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px;
+  font-size: 11px; color: var(--muted); gap: 16px;
 }
+.statusbar .sep { color: var(--border); }
+.statusbar a { color: var(--muted); text-decoration: none; transition: color .2s; }
+.statusbar a:hover { color: var(--gold); }
+.statusbar .uptime { margin-left: auto; }
 
-/* ── SVG architecture interaction ── */
-.arch-layer { transition: opacity .2s; }
-.arch-layer rect { transition: fill .3s, stroke .3s; }
-.arch-layer:hover rect { filter: brightness(1.3); }
-.arch-layer:hover .layer-detail { opacity: 1; }
-.layer-detail { opacity: 0; transition: opacity .3s; }
-.connector-line { transition: stroke .3s; }
-.arch-layer:hover ~ .arch-layer .connector-line,
-.arch-wrap:hover .connector-line { stroke: var(--gold); }
+/* ── Tab content hidden states ── */
+.tab-hidden { display: none; }
 
-/* ── Tooltip ── */
-[data-tooltip] { position: relative; cursor: help; }
-[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #000;
-  color: #fff;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 10;
+@media (max-width: 640px) {
+  .topnav { padding: 0 12px; gap: 2px; overflow-x: auto; }
+  .topnav .logo { font-size: 12px; margin-right: 8px; }
+  .topnav .tab-btn { font-size: 11px; padding: 6px 10px; }
+  .topnav .version-badge { display: none; }
+  .cards { grid-template-columns: repeat(2, 1fr); }
+  .cmd-grid { grid-template-columns: 1fr; }
+  .detail-panel { width: 100vw; max-width: 100vw; }
+  .main { padding: 0 12px 40px; }
 }
-
-/* ── Pulse dot ── */
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .4; }
-}
-.pulse { animation: pulse 2s infinite; }
 </style>
 </head>
 <body>
-<div class="container">
 
-<!-- ═══ HEADER ═══ -->
-<div class="header">
-  <h1>Personal OS Dashboard</h1>
-  <div class="version">v2.8.0 · 外挂硬盘物理部署</div>
-  <div class="slogan">换机即用，拔盘即走 — 思维痕迹永不丢失</div>
-  <div class="generated">生成时间: 2026-05-25 · 数据来源: analytics.db + bridge.db</div>
+<!-- ═══ TOP NAV ═══ -->
+<nav class="topnav">
+  <span class="logo">Personal OS</span>
+  <button class="tab-btn active" data-tab="arch">架构</button>
+  <button class="tab-btn" data-tab="data">数据</button>
+  <button class="tab-btn" data-tab="timeline">时间线</button>
+  <button class="tab-btn" data-tab="commands">命令</button>
+  <span class="version-badge">v2.8.0</span>
+</nav>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<div class="main">
+
+<!-- ── TAB: Architecture ── -->
+<div class="tab-panel active" id="tab-arch">
+  <div class="section-hd">五层演进架构 · 点击层查看详情</div>
+  <div class="arch-wrap">
+    <svg viewBox="0 0 840 640" width="100%" height="auto" style="max-width:840px;">
+
+      <!-- L5: 数字代理层 -->
+      <g class="arch-layer" transform="translate(20,20)" data-layer="5">
+        <rect x="0" y="0" width="800" height="90" rx="10"
+              fill="#FF6B3508" stroke="#FF6B35" stroke-width="1.5" stroke-dasharray="6,3" stroke-opacity="0.6"/>
+        <text x="18" y="30" font-size="15" font-weight="700" fill="#FF6B35">05 数字代理层</text>
+        <text x="18" y="50" font-size="12" fill="#8892a4">「思维复制 / 决策模拟 / 数字分身」</text>
+        <text x="18" y="72" font-size="11" fill="#555">种子期 — 5 维数据采集中 · 50+ 会话后自动评估</text>
+        <circle cx="770" cy="18" r="5" fill="#FF6B35" opacity="0.35"/>
+        <text x="753" y="22" font-size="9" fill="#555" text-anchor="end">种子期</text>
+      </g>
+
+      <!-- connector L5→L4 -->
+      <line x1="420" y1="110" x2="420" y2="135" stroke="#2a2a4a" stroke-width="1.5" class="data-flow"/>
+      <circle cx="420" cy="122" r="3" fill="#FFD700" opacity="0.25"/>
+
+      <!-- L4: 语言镜像层 -->
+      <g class="arch-layer" transform="translate(20,135)" data-layer="4">
+        <rect x="0" y="0" width="800" height="90" rx="10"
+              fill="#6C5CE708" stroke="#6C5CE7" stroke-width="1.5" stroke-dasharray="6,3" stroke-opacity="0.7"/>
+        <text x="18" y="30" font-size="15" font-weight="700" fill="#6C5CE7">04 语言镜像层</text>
+        <text x="18" y="50" font-size="12" fill="#8892a4">「表达画像 / 行为模式 / 隐藏信号分析」</text>
+        <text x="18" y="72" font-size="11" fill="#8892a4">MVP 可用 · xw mirror 生成表达画像报告</text>
+        <circle cx="770" cy="18" r="5" fill="#6C5CE7" opacity="0.7"/>
+        <text x="753" y="22" font-size="9" fill="#8892a4" text-anchor="end">MVP</text>
+      </g>
+
+      <!-- connector L4→L3 -->
+      <line x1="420" y1="225" x2="420" y2="250" stroke="#2a2a4a" stroke-width="1.5" class="data-flow"/>
+      <circle cx="420" cy="237" r="3" fill="#FFD700" opacity="0.25"/>
+
+      <!-- L3: 交互渲染层 -->
+      <g class="arch-layer" transform="translate(20,250)" data-layer="3">
+        <rect x="0" y="0" width="800" height="90" rx="10"
+              fill="#27AE6008" stroke="#27AE60" stroke-width="1.5" stroke-dasharray="6,3" stroke-opacity="0.5"/>
+        <text x="18" y="30" font-size="15" font-weight="700" fill="#27AE60">03 交互渲染层</text>
+        <text x="18" y="50" font-size="12" fill="#8892a4">「终端降噪 / 颜色编码 / 注意力保护」</text>
+        <text x="18" y="72" font-size="11" fill="#555">种子期 — 设计已明确: 正则高亮渲染挂载器</text>
+        <circle cx="770" cy="18" r="5" fill="#27AE60" opacity="0.35"/>
+        <text x="753" y="22" font-size="9" fill="#555" text-anchor="end">种子期</text>
+      </g>
+
+      <!-- connector L3→L2 -->
+      <line x1="420" y1="340" x2="420" y2="365" stroke="#2a2a4a" stroke-width="1.5" class="data-flow"/>
+      <circle cx="420" cy="352" r="3" fill="#FFD700" opacity="0.45"/>
+
+      <!-- L2: 灵感白板层 — ACTIVE -->
+      <g class="arch-layer" transform="translate(20,365)" data-layer="2">
+        <rect x="0" y="0" width="800" height="90" rx="10"
+              fill="#FFD70006" stroke="#FFD700" stroke-width="2" stroke-opacity="0.9"/>
+        <text x="18" y="30" font-size="15" font-weight="700" fill="#FFD700">02 灵感白板层</text>
+        <text x="18" y="50" font-size="12" fill="#e0e0e0">「碎片捕获 / 关联缝合 / Obsidian 知识库」</text>
+        <text x="18" y="72" font-size="11" fill="#8892a4">活跃 · 13 条灵感 · ⌃I 弹窗 + xw idea + flush 方案 B</text>
+        <circle cx="770" cy="18" r="5" fill="#27AE60" class="breathe-dot"/>
+        <text x="753" y="22" font-size="9" fill="#27AE60" text-anchor="end">活跃</text>
+      </g>
+
+      <!-- connector L2→L1 -->
+      <line x1="420" y1="455" x2="420" y2="480" stroke="#2a2a4a" stroke-width="2" class="data-flow"/>
+      <circle cx="420" cy="467" r="4" fill="#FFD700" opacity="0.6"/>
+
+      <!-- L1: 系统内核层 — ACTIVE -->
+      <g class="arch-layer" transform="translate(20,480)" data-layer="1">
+        <rect x="0" y="0" width="800" height="90" rx="10"
+              fill="#3498DB06" stroke="#3498DB" stroke-width="2" stroke-opacity="0.9"/>
+        <text x="18" y="30" font-size="15" font-weight="700" fill="#3498DB">01 系统内核层</text>
+        <text x="18" y="50" font-size="12" fill="#e0e0e0">「行为报告 / 任务追踪 / 偏好分析 / 桥梁通信」</text>
+        <text x="18" y="72" font-size="11" fill="#8892a4">活跃 · 12 条任务 · 2 个会话 · xw report + advisor + search</text>
+        <circle cx="770" cy="18" r="5" fill="#27AE60" class="breathe-dot d2"/>
+        <text x="753" y="22" font-size="9" fill="#27AE60" text-anchor="end">活跃</text>
+      </g>
+
+      <!-- Right-side data flow arrow -->
+      <line x1="790" y1="545" x2="790" y2="65" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4,4"
+            marker-end="url(#arrow-up)"/>
+      <text x="802" y="305" font-size="9" fill="#333" transform="rotate(90,802,305)">数据↑ 画像↓</text>
+      <defs>
+        <marker id="arrow-up" markerWidth="6" markerHeight="8" refX="3" refY="4" orient="auto">
+          <path d="M0,8 L3,0 L6,8" fill="#2a2a4a"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
 </div>
 
-<!-- ═══ SECTION 1: REAL-TIME DATA ═══ -->
-<div class="section-title">实时数据面板</div>
-<div class="cards">
-  <div class="card">
-    <div class="num">2</div>
-    <div class="label">活跃会话</div>
-    <div class="sub">session_tasks 去重</div>
-  </div>
-  <div class="card">
-    <div class="num blue">12</div>
-    <div class="label">任务流转记录</div>
-    <div class="sub">session_tasks 总数</div>
-  </div>
-  <div class="card">
-    <div class="num orange">13</div>
-    <div class="label">灵感碎片</div>
-    <div class="sub">1 条待处理 · 12 条已缝合</div>
-  </div>
-  <div class="card">
-    <div class="num green">5</div>
-    <div class="label">想法种子</div>
-    <div class="sub">5 颗休眠中 · 等待催熟</div>
-  </div>
-  <div class="card">
-    <div class="num">1</div>
-    <div class="label">用户偏好</div>
-    <div class="sub">决策参谋知识库</div>
-  </div>
-  <div class="card">
-    <div class="num orange">1</div>
-    <div class="label">桥梁待处理</div>
-    <div class="sub">Hermes 小龙虾 协作</div>
-  </div>
-</div>
-
-<!-- ═══ SECTION 2: FIVE-LAYER ARCHITECTURE ═══ -->
-<div class="section-title">五层演进架构</div>
-<div class="arch-wrap">
-<svg viewBox="0 0 840 640" width="100%" height="auto" style="max-width:840px;">
-
-  <defs>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <linearGradient id="grad-l1" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#3fb95022"/><stop offset="100%" stop-color="#3fb95008"/>
-    </linearGradient>
-    <linearGradient id="grad-l2" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#58a6ff22"/><stop offset="100%" stop-color="#58a6ff08"/>
-    </linearGradient>
-    <linearGradient id="grad-l3" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#bc8cff22"/><stop offset="100%" stop-color="#bc8cff08"/>
-    </linearGradient>
-    <linearGradient id="grad-l4" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#f0c04022"/><stop offset="100%" stop-color="#f0c04008"/>
-    </linearGradient>
-    <linearGradient id="grad-l5" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#ff6b3522"/><stop offset="100%" stop-color="#ff6b3508"/>
-    </linearGradient>
-  </defs>
-
-  <!-- L5: 数字代理层 -->
-  <g class="arch-layer" transform="translate(20,20)">
-    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l5)" stroke="#FF6B35" stroke-width="1.5" stroke-dasharray="6,3"/>
-    <text x="18" y="30" font-size="15" font-weight="700" fill="#FF6B35">05 数字代理层</text>
-    <text x="18" y="50" font-size="12" fill="#8892a4">「思维复制 / 决策模拟 / 数字分身」</text>
-    <text x="18" y="72" font-size="11" fill="#555">
-      状态: 种子期 🌱 | 画像: 5维数据采集中 | 触发条件: 50+会话后自动评估
-    </text>
-    <!-- Status dot -->
-    <circle cx="770" cy="18" r="5" fill="#FF6B35" opacity="0.5"/>
-    <text x="755" y="22" font-size="9" fill="#555" text-anchor="end">种子期</text>
-  </g>
-
-  <!-- connector -->
-  <line x1="420" y1="110" x2="420" y2="135" stroke="#2a2a4a" stroke-width="1.5" class="connector-line"/>
-  <circle cx="420" cy="122" r="3" fill="#FFD700" opacity="0.3"/>
-
-  <!-- L4: 语言镜像层 -->
-  <g class="arch-layer" transform="translate(20,135)">
-    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l4)" stroke="#f0c040" stroke-width="1.5"/>
-    <text x="18" y="30" font-size="15" font-weight="700" fill="#f0c040">04 语言镜像层</text>
-    <text x="18" y="50" font-size="12" fill="#8892a4">「表达画像 / 行为模式 / 隐藏信号分析」</text>
-    <text x="18" y="72" font-size="11" fill="#8892a4">
-      状态: MVP · xw mirror 可用 | 能力: 表达画像报告生成
-    </text>
-    <circle cx="770" cy="18" r="5" fill="#f0c040"/>
-    <text x="755" y="22" font-size="9" fill="#8892a4" text-anchor="end">MVP</text>
-  </g>
-
-  <!-- connector -->
-  <line x1="420" y1="225" x2="420" y2="250" stroke="#2a2a4a" stroke-width="1.5" class="connector-line"/>
-  <circle cx="420" cy="237" r="3" fill="#FFD700" opacity="0.3"/>
-
-  <!-- L3: 交互渲染层 -->
-  <g class="arch-layer" transform="translate(20,250)">
-    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l3)" stroke="#bc8cff" stroke-width="1.5" stroke-dasharray="6,3"/>
-    <text x="18" y="30" font-size="15" font-weight="700" fill="#bc8cff">03 交互渲染层</text>
-    <text x="18" y="50" font-size="12" fill="#8892a4">「终端降噪 / 颜色编码 / 注意力保护」</text>
-    <text x="18" y="72" font-size="11" fill="#555">
-      状态: 种子期 🌱 | 设计已明确: 正则高亮渲染挂载器
-    </text>
-    <circle cx="770" cy="18" r="5" fill="#bc8cff" opacity="0.5"/>
-    <text x="755" y="22" font-size="9" fill="#555" text-anchor="end">种子期</text>
-  </g>
-
-  <!-- connector -->
-  <line x1="420" y1="340" x2="420" y2="365" stroke="#2a2a4a" stroke-width="1.5" class="connector-line"/>
-  <circle cx="420" cy="352" r="3" fill="#FFD700" opacity="0.5"/>
-
-  <!-- L2: 灵感白板层 -->
-  <g class="arch-layer" transform="translate(20,365)">
-    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l2)" stroke="#58a6ff" stroke-width="2"/>
-    <text x="18" y="30" font-size="15" font-weight="700" fill="#58a6ff">02 灵感白板层</text>
-    <text x="18" y="50" font-size="12" fill="#e0e0e0">「碎片捕获 / 关联缝合 / Obsidian 知识库」</text>
-    <text x="18" y="72" font-size="11" fill="#8892a4">
-      状态: 活跃 ✅ | 13条灵感 · ⌃I 弹窗 + xw idea + flush 方案B | macOS 原生应用开发中
-    </text>
-    <circle cx="770" cy="18" r="6" fill="#3fb950" class="pulse"/>
-    <text x="753" y="22" font-size="9" fill="#3fb950" text-anchor="end">活跃</text>
-  </g>
-
-  <!-- connector -->
-  <line x1="420" y1="455" x2="420" y2="480" stroke="#2a2a4a" stroke-width="2" class="connector-line"/>
-  <circle cx="420" cy="467" r="4" fill="#FFD700" opacity="0.7"/>
-
-  <!-- L1: 系统内核层 -->
-  <g class="arch-layer" transform="translate(20,480)">
-    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l1)" stroke="#3fb950" stroke-width="2"/>
-    <text x="18" y="30" font-size="15" font-weight="700" fill="#3fb950">01 系统内核层</text>
-    <text x="18" y="50" font-size="12" fill="#e0e0e0">「行为报告 / 任务追踪 / 偏好分析 / 桥梁通信」</text>
-    <text x="18" y="72" font-size="11" fill="#8892a4">
-      状态: 活跃 ✅ | 12条任务 · 2个会话 · xw report + xw advisor + xw search | 飞书桥接已通
-    </text>
-    <circle cx="770" cy="18" r="6" fill="#3fb950" class="pulse"/>
-    <text x="753" y="22" font-size="9" fill="#3fb950" text-anchor="end">活跃</text>
-  </g>
-
-  <!-- data flow arrows on the right -->
-  <defs>
-    <marker id="arrow-up" markerWidth="6" markerHeight="8" refX="3" refY="4" orient="auto">
-      <path d="M0,8 L3,0 L6,8" fill="#2a2a4a"/>
-    </marker>
-  </defs>
-  <line x1="790" y1="545" x2="790" y2="65" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4,4" marker-end="url(#arrow-up)"/>
-  <text x="800" y="305" font-size="9" fill="#333" transform="rotate(90,800,305)">数据向上流动 → 画像向下沉淀</text>
-
-</svg>
-</div>
-
-<!-- ═══ SECTION 3: COMMAND REFERENCE ═══ -->
-<div class="section-title">命令速查手册</div>
-<div class="cmds">
-
-  <!-- L1 -->
-  <div class="cmd-group open">
-    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
-      <span class="layer-tag l1">L1 内核</span>
-      <span class="group-name">系统内核层命令</span>
-      <span class="chevron">▶</span>
+<!-- ── TAB: Data ── -->
+<div class="tab-panel" id="tab-data">
+  <div class="section-hd">实时数据面板</div>
+  <div class="cards" id="stat-cards">
+    <div class="card">
+      <div class="num blue" data-target="2">0</div>
+      <div class="label">活跃会话</div>
+      <div class="sub">session_tasks 去重</div>
     </div>
-    <div class="cmd-body">
-      <div class="cmd-row"><span class="cmd-name">xw</span><span class="cmd-arrow">→</span><span class="cmd-desc">查看上下文使用率 + 任务类型 + 预警阈值</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw flow</span><span class="cmd-arrow">→</span><span class="cmd-desc">查看当前会话任务切换路径与流转图</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw report</span><span class="cmd-arrow">→</span><span class="cmd-desc">一键生成日/周/月行为回顾报告，支持项目过滤</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw search "..."</span><span class="cmd-arrow">→</span><span class="cmd-desc">TF-IDF 混合语义搜索历史灵感与任务</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw advisor on/off</span><span class="cmd-arrow">→</span><span class="cmd-desc">决策参谋开关：观察用户偏好并积累领域知识</span></div>
+    <div class="card">
+      <div class="num blue" data-target="12">0</div>
+      <div class="label">任务流转记录</div>
+      <div class="sub">session_tasks 总数</div>
+    </div>
+    <div class="card">
+      <div class="num orange" data-target="13">0</div>
+      <div class="label">灵感碎片</div>
+      <div class="sub">1 条待处理 · 12 条已缝合</div>
+    </div>
+    <div class="card">
+      <div class="num purple" data-target="5">0</div>
+      <div class="label">想法种子</div>
+      <div class="sub">5 颗休眠中 · 等待催熟</div>
+    </div>
+    <div class="card">
+      <div class="num gold" data-target="1">0</div>
+      <div class="label">用户偏好</div>
+      <div class="sub">决策参谋知识库</div>
+    </div>
+    <div class="card">
+      <div class="num green" data-target="1">0</div>
+      <div class="label">桥梁待处理</div>
+      <div class="sub">Hermes · 小龙虾 协作</div>
     </div>
   </div>
 
-  <!-- L2 -->
-  <div class="cmd-group open">
-    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
-      <span class="layer-tag l2">L2 灵感</span>
-      <span class="group-name">灵感白板层命令</span>
-      <span class="chevron">▶</span>
+  <div class="ideas-preview">
+    <h3>💡 最近灵感碎片</h3>
+    <div class="idea-chip">
+      <div class="i-date">2026-05-25</div>
+      <div class="i-text">多窗口场景下灵感的上下文应该按关联度分配 — 当多窗口同时活跃时，灵感不应简单绑定当前焦点窗口，而应根据各窗口内容与灵感文本的语义关联度进行加权分配。</div>
+      <div class="i-tags">产品设计 · 上下文感知</div>
     </div>
-    <div class="cmd-body">
-      <div class="cmd-row"><span class="cmd-name">xw idea "..."</span><span class="cmd-arrow">→</span><span class="cmd-desc">瞬时捕捉碎片灵感，自动绑定当前任务上下文</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw flush</span><span class="cmd-arrow">→</span><span class="cmd-desc">结算灵感，结合执行记录生成产品化重构报告</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw hotkey start/stop</span><span class="cmd-arrow">→</span><span class="cmd-desc">全局快捷键守护进程控制（⌃I 弹窗）</span></div>
+    <div class="idea-chip">
+      <div class="i-date">2026-05-24</div>
+      <div class="i-text">Obsidian 双向链接功能可以让灵感之间形成网状知识结构 — 不仅仅是线性缝合，而是让每条灵感成为一个节点，通过标签和关键词自动建立双向引用关系。</div>
+      <div class="i-tags">工具集成 · 知识管理</div>
     </div>
-  </div>
-
-  <!-- L3 -->
-  <div class="cmd-group">
-    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
-      <span class="layer-tag l3">L3 渲染</span>
-      <span class="group-name">交互渲染层命令</span>
-      <span class="chevron">▶</span>
-    </div>
-    <div class="cmd-body">
-      <div class="cmd-row"><span class="cmd-name">xw dashboard</span><span class="cmd-arrow">→</span><span class="cmd-desc">深色 SVG 网页仪表盘，饼图+柱状图可视化</span></div>
-      <div class="cmd-row"><span class="cmd-name">(规划中)</span><span class="cmd-arrow">→</span><span class="cmd-desc">正则高亮渲染挂载器 — 终端降噪可视化</span></div>
-    </div>
-  </div>
-
-  <!-- L4 -->
-  <div class="cmd-group">
-    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
-      <span class="layer-tag l4">L4 镜像</span>
-      <span class="group-name">语言镜像层命令</span>
-      <span class="chevron">▶</span>
-    </div>
-    <div class="cmd-body">
-      <div class="cmd-row"><span class="cmd-name">xw mirror</span><span class="cmd-arrow">→</span><span class="cmd-desc">语言镜像分析 MVP：生成表达画像报告</span></div>
-    </div>
-  </div>
-
-  <!-- L5 -->
-  <div class="cmd-group">
-    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
-      <span class="layer-tag l5">L5 代理</span>
-      <span class="group-name">数字代理层命令</span>
-      <span class="chevron">▶</span>
-    </div>
-    <div class="cmd-body">
-      <div class="cmd-row"><span class="cmd-name">xw seed add</span><span class="cmd-arrow">→</span><span class="cmd-desc">种下深思想法种子（含领域和标签）</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw seed list</span><span class="cmd-arrow">→</span><span class="cmd-desc">浏览所有已种下的想法种子</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw seed show &lt;id&gt;</span><span class="cmd-arrow">→</span><span class="cmd-desc">查看种子详情（关联种子、笔记、状态）</span></div>
-      <div class="cmd-row"><span class="cmd-name">xw imagine</span><span class="cmd-arrow">→</span><span class="cmd-desc">想象力素材库 — 文字记录精致想象画面</span></div>
+    <div class="idea-chip">
+      <div class="i-date">2026-05-24</div>
+      <div class="i-text">灵感之间应该按任务目标和时间关联 — 同一任务目标下的灵感碎片应自动聚合成一个语义群组，并按照时间顺序排列，形成完整的思维演进路径。</div>
+      <div class="i-tags">产品设计 · 灵感管理</div>
     </div>
   </div>
 </div>
 
-<!-- ═══ SECTION 4: DESIGN PRINCIPLES ═══ -->
-<div class="section-title">产品设计原则</div>
-<div class="principles">
-  <div class="principle">
-    <div class="p-num">1</div>
-    <div class="p-title">零摩擦是生存底线</div>
-    <div class="p-desc">灵感在3秒内不记录就会消失。删掉一切不必要的步骤——不要求标题、分类、确认。直接存，安静地存。</div>
-  </div>
-  <div class="principle">
-    <div class="p-num">2</div>
-    <div class="p-title">捕获与整理必须解耦</div>
-    <div class="p-desc">捕获发生在想法产生的瞬间（&lt;50ms），处理发生在几小时后的 flush 阶段。大脑产生想法，AI 理解想法。</div>
-  </div>
-  <div class="principle">
-    <div class="p-num">3</div>
-    <div class="p-title">自包含配置</div>
-    <div class="p-desc">所有设置内建在 ⌘K 面板中。用户永远不需要打开系统设置、终端或编辑 JSON 文件。</div>
-  </div>
-  <div class="principle">
-    <div class="p-num">4</div>
-    <div class="p-title">色彩是识别信号</div>
-    <div class="p-desc">亮黄标题 #FFD700、暖奶油底 #FEF9EF、橙按钮 #FF6B35——在任何背景下都能一眼识别。</div>
-  </div>
-  <div class="principle">
-    <div class="p-num">5</div>
-    <div class="p-title">数据跟着人走</div>
-    <div class="p-desc">一切存在外挂硬盘上。换一台 Mac，插上盘，所有灵感、报告、种子都在——"换机即用，拔盘即走"。</div>
-  </div>
-  <div class="principle">
-    <div class="p-num">6</div>
-    <div class="p-title">工具应该自我成长</div>
-    <div class="p-desc">每一次使用都在积累数据，每一次 flush 都在产生新洞察。配置用 JSON，数据结构留扩展字段。</div>
-  </div>
-  <div class="principle">
-    <div class="p-num">7</div>
-    <div class="p-title">文档信息密度</div>
-    <div class="p-desc">每次功能迭代后自动更新 PRD、命令速查、系统宪法。确保新环境零上下文快速复现。</div>
-  </div>
-  <div class="principle">
-    <div class="p-num">8</div>
-    <div class="p-title">双脑协作分工</div>
-    <div class="p-desc">Hermes 大脑（深度推理+代码执行）+ 小龙虾前哨（多渠道消息+轻量回复），通过 bridge 共享状态。</div>
-  </div>
+<!-- ── TAB: Timeline ── -->
+<div class="tab-panel" id="tab-timeline">
+  <div class="section-hd">系统版本演进时间线</div>
+  <div class="timeline" id="timeline-container"></div>
 </div>
 
-<!-- ═══ SECTION 5: ROADMAP + SEEDS ═══ -->
-<div class="section-title">演进路线</div>
-<div class="roadmap">
-  <div class="roadmap-col">
-    <h3>✅ 当前能力</h3>
-    <ul>
-      <li>行为报告（日/周/月）</li>
-      <li>灵感捕获 + 异步缝合</li>
-      <li>TF-IDF 语义搜索</li>
-      <li>全局热键悬浮便签</li>
-      <li>决策参谋偏好学习</li>
-      <li>飞书桥接（龙虾前哨）</li>
-      <li>种子库 CRUD</li>
-      <li>语言镜像 MVP</li>
-    </ul>
-  </div>
-  <div class="roadmap-col">
-    <h3>🔨 近期计划</h3>
-    <ul>
-      <li>CtxIdea macOS 原生应用</li>
-      <li>终端降噪渲染挂载器</li>
-      <li>多 Agent 协作增强</li>
-      <li>种子催熟自动触发</li>
-      <li>向量检索升级</li>
-    </ul>
-  </div>
-  <div class="roadmap-col">
-    <h3>🔮 远期愿景</h3>
-    <ul>
-      <li>数字画像三合一坍缩</li>
-      <li>数字代理前置试错</li>
-      <li>想象力素材库 AIGC 还原</li>
-      <li>认知垂直整合闭环</li>
-      <li>跨设备外挂盘生态</li>
-    </ul>
-  </div>
-</div>
-
-<!-- ═══ SECTION 5b: THINKING SEEDS ═══ -->
-<div class="section-title">思考中的方向（来自种子库）</div>
-<div class="seed-list">
-  <div class="seed-item">
-    <div class="seed-dot"></div>
-    <div>
-      <div class="seed-tags">产品设计 · 多代理协作</div>
-      <div class="seed-text">多工具编排时的思维清晰助手：同时操作 Hermes/Halis/OpenClaw 等多 Agent 时需要一个专注于帮助人梳理思路的助手——聚焦单一任务，不被多 Agent 噪音干扰。</div>
-    </div>
-  </div>
-  <div class="seed-item">
-    <div class="seed-dot"></div>
-    <div>
-      <div class="seed-tags">方法论 · 产品设计</div>
-      <div class="seed-text">学习的前提不是方法，是注意力。快速低成本投入 + 长时间坚持不被外界打扰——这是一切学习方法见效的前提。娱乐化学习会耗散专注力，使思考颗粒度下降。</div>
-    </div>
-  </div>
-  <div class="seed-item">
-    <div class="seed-dot"></div>
-    <div>
-      <div class="seed-tags">创意创作 · 数字代理</div>
-      <div class="seed-text">想象力素材库：当脑海浮现精致想象画面时立即用文字精准记录 → 借 AIGC 还原成视觉画面。长期积累让 AI 读懂个人审美与思维风格，达到临界阈值后实现「不动手也能成为独立创作者」。</div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══ SECTION 6: FILE PATHS ═══ -->
-<div class="section-title">系统文件路径速查</div>
-<div class="paths">
-  <div class="path-row">
-    <span class="path-icon">🗄️</span>
-    <span class="path-dir">context-system/analytics.db</span>
-    <span class="path-desc">主数据库（6表：ideas / session_tasks / seeds / user_preferences / decisions / profiler_events）</span>
-  </div>
-  <div class="path-row">
-    <span class="path-icon">🧠</span>
-    <span class="path-dir">context-system/core/</span>
-    <span class="path-desc">核心模块（db.py / ideas.py / detector.py / tracker.py / profiler.py / mirror.py / vector_search.py）</span>
-  </div>
-  <div class="path-row">
-    <span class="path-icon">📜</span>
-    <span class="path-dir">scripts/xw*</span>
-    <span class="path-desc">命令行工具（12个子命令：xw / xw-report / xw-idea / xw-flush / xw-search / xw-mirror / xw-seed / ...）</span>
-  </div>
-  <div class="path-row">
-    <span class="path-icon">📝</span>
-    <span class="path-dir">context-system/Whiteboard/</span>
-    <span class="path-desc">flush 导出目录（Obsidian 格式报告 + 独立灵感 .md 文件）</span>
-  </div>
-  <div class="path-row">
-    <span class="path-icon">🌉</span>
-    <span class="path-dir">../bridge/</span>
-    <span class="path-desc">双脑协作桥梁（bridge.py + 共享上下文 + 双方档案 + bridge.db）</span>
-  </div>
-  <div class="path-row">
-    <span class="path-icon">📐</span>
-    <span class="path-dir">context-system/Personal_OS_Manifest.md</span>
-    <span class="path-desc">系统宪法种子 — 五层架构 + 进化契约 + 版本演进记录</span>
-  </div>
-  <div class="path-row">
-    <span class="path-icon">🎨</span>
-    <span class="path-dir">applications/CtxIdea/</span>
-    <span class="path-desc">macOS 原生灵感便签（Swift + SwiftUI，开发中）</span>
-  </div>
-  <div class="path-row">
-    <span class="path-icon">⚙️</span>
-    <span class="path-dir">context-system/popup_config.json</span>
-    <span class="path-desc">悬浮便签配置（快捷键 / 透明度 / 窗口尺寸 / 位置）</span>
-  </div>
-</div>
-
-<!-- ═══ FOOTER ═══ -->
-<div class="footer">
-  Personal OS Dashboard · 数据来源: analytics.db + bridge.db · 生成: 2026-05-25<br>
-  外挂盘路径: /Volumes/13384923891/hermes-agent/ · 系统版本 v2.8.0<br>
-  每次打开此页面都会显示数据库中的最新数据（静态快照）
+<!-- ── TAB: Commands ── -->
+<div class="tab-panel" id="tab-commands">
+  <div class="section-hd">命令速查手册</div>
+  <input type="text" class="cmd-search" id="cmd-search" placeholder="搜索命令...">
+  <div class="cmd-grid" id="cmd-grid"></div>
 </div>
 
 </div>
 
-<!-- toggle all cmd groups -->
+<!-- ═══ DETAIL PANEL OVERLAY ═══ -->
+<div class="detail-overlay" id="detail-overlay"></div>
+<div class="detail-panel" id="detail-panel">
+  <button class="close-btn" id="detail-close">&times;</button>
+  <div id="detail-content"></div>
+</div>
+
+<!-- ═══ BOTTOM STATUS BAR ═══ -->
+<div class="statusbar">
+  <span id="uptime">运行时长 —</span>
+  <span class="sep">|</span>
+  <a href="https://github.com" target="_blank">GitHub</a>
+  <span class="sep">|</span>
+  <span>最后更新 2026-05-25</span>
+  <span class="uptime">外挂盘: /Volumes/13384923891/hermes-agent/</span>
+</div>
+
 <script>
-// Expand L1 and L2 by default, collapse L3-L5
-document.querySelectorAll('.cmd-group').forEach((g, i) => {
-  if (i >= 2) g.classList.remove('open');
+// ═══════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════
+
+const versionTimeline = [
+  { v: "v2.1",    date: "2026-05-21", current: false,
+    changes: [{ tag:"infra", text:"首次种子落盘：建立五层架构骨架、Layer 01 内核层占位、Layer 02 白板层完整实现、签署进化契约" }] },
+  { v: "v2.1.1",  date: "2026-05-21", current: false,
+    changes: [{ tag:"infra", text:"新增 Command_Reference.md — 命令快捷键绑定方案、6 条命令的场合决策树、日工作流模板、反模式指南" }] },
+  { v: "v2.1.2",  date: "2026-05-21", current: false,
+    changes: [{ tag:"ideas", text:"新增 ctx-idea-popup 悬浮便签窗口：⌃I 快捷键弹出独立捕获窗口，⌘Enter 提交，Esc 关闭，底层直连 whiteboard.py" }] },
+  { v: "v2.2.0",  date: "2026-05-22", current: false,
+    changes: [
+      { tag:"bridge", text:"双脑协作桥梁上线：OpenClaw 小龙虾部署" },
+      { tag:"bridge", text:"bridge.py 加权上下文系统（时间衰减 + 重要性权重）" },
+      { tag:"bridge", text:"双方互认档案 + 时间衰减自动归档" }
+    ]},
+  { v: "v2.3.0",  date: "2026-05-24", current: false,
+    changes: [
+      { tag:"kernel", text:"ctx-report Layer 01 装修完成：profiler.py 升级（日报/周报/趋势/任务流）" },
+      { tag:"kernel", text:"ctx-report 从占位符重写为完整终端行为报告（支持 --week/--month）" },
+      { tag:"kernel", text:"session_tasks + profiler_events 表落盘" }
+    ]},
+  { v: "v2.4.0",  date: "2026-05-24", current: false,
+    changes: [
+      { tag:"ideas", text:"Ideas 重构：whiteboard→ideas 改名、PyObjC 重写悬浮便签" },
+      { tag:"ideas", text:"模块化架构（db.py 唯一数据接口）" },
+      { tag:"agent", text:"决策参谋种子（user_preferences 表 + ctx-advisor 开关 + profiler 偏好追踪）" }
+    ]},
+  { v: "v2.5.0",  date: "2026-05-24", current: false,
+    changes: [{ tag:"infra", text:"命令前缀改名 ctx→xw：所有命令和别名统一迁移至 xw 前缀，更新 zshrc 别名配置" }] },
+  { v: "v2.6.0",  date: "2026-05-24", current: false,
+    changes: [
+      { tag:"ideas", text:"flush 方案 B：PyObjC 弹窗替代 tkinter + AppleScript 原生对话框" },
+      { tag:"infra", text:"Obsidian 格式 flush 导出 + event_note 字段扩展" },
+      { tag:"kernel", text:"Claude-Mem 设计吸收（P1 项目隔离 + P2 仪表盘 + P3 向量检索）" }
+    ]},
+  { v: "v2.7.0",  date: "2026-05-25", current: false,
+    changes: [
+      { tag:"bridge", text:"龙虾角色拓展：飞书渠道正式接通（Websocket 长连接，bot 已解析）" },
+      { tag:"mirror", text:"语言镜像层 MVP：xw mirror 命令行工具 + profile 自动分析" },
+      { tag:"agent", text:"种子库 CRUD 落地：seeds 表 + xw seed add/list/show" }
+    ]},
+  { v: "v2.7.1",  date: "2026-05-25", current: false,
+    changes: [
+      { tag:"agent", text:"数字代理层能力评估 v1.1：profiler.py 自动写 profiler_events" },
+      { tag:"agent", text:"50 会话触发逻辑 + cross_analysis() 跨维度分析雏形 + PRD 更新" }
+    ]},
+  { v: "v2.8.0",  date: "2026-05-25", current: true,
+    changes: [
+      { tag:"infra", text:"全量架构审计：修正文件树（ideas.py 替代 whiteboard.py、xw* 替代 ctx-*）" },
+      { tag:"infra", text:"补全 9 个子命令表、更新别名部署步骤、修正桥梁层路径" },
+      { tag:"kernel", text:"交互式仪表盘 v1 发布：单文件 HTML 仪表盘，深色 SVG 可视化" }
+    ]},
+];
+
+const layerDetails = {
+  1: {
+    name: "01 系统内核层", tag: "L1 · 内核", color: "#3498DB", status: "active", statusLabel: "活跃",
+    desc: "系统的基础设施层，负责行为追踪、任务检测、偏好分析和跨 Agent 通信。是整个 Personal OS 的数据底座。",
+    components: [
+      { name:"analytics.db", status:"稳定", desc:"6 表 SQLite 数据库（ideas / session_tasks / seeds / user_preferences / decisions / profiler_events）" },
+      { name:"tracker.py", status:"稳定", desc:"任务流转追踪器，记录每次会话的任务类型切换路径" },
+      { name:"profiler.py", status:"稳定", desc:"行为画像分析器，支持日报/周报/趋势分析 + 数字代理跨维度分析" },
+      { name:"detector.py", status:"稳定", desc:"任务类型检测器（编程/内容/文档/通用四分类）" },
+      { name:"db.py", status:"稳定", desc:"统一数据访问层，所有模块的唯一数据库接口" },
+    ]
+  },
+  2: {
+    name: "02 灵感白板层", tag: "L2 · 灵感", color: "#FFD700", status: "active", statusLabel: "活跃",
+    desc: "灵感捕获与异步缝合层。零延迟捕获碎片想法（<50ms），通过 flush 机制异步将灵感与执行轨迹交叉缝合为产品洞察。",
+    components: [
+      { name:"ideas.py", status:"稳定", desc:"灵感核心处理器（capture / list / flush / stitch）" },
+      { name:"xw-idea-popup", status:"稳定", desc:"AppleScript 原生悬浮便签 v4.1，⌃I 全局热键唤起" },
+      { name:"xw-hotkey", status:"稳定", desc:"Carbon Event API 全局快捷键守护进程" },
+      { name:"Whiteboard/", status:"稳定", desc:"flush 导出目录（Obsidian 格式报告 + 独立灵感 .md）" },
+    ]
+  },
+  3: {
+    name: "03 交互渲染层", tag: "L3 · 渲染", color: "#27AE60", status: "seed", statusLabel: "种子期",
+    desc: "终端降噪与视觉解析层。通过正则高亮渲染挂载器消除代码堆砌的视觉疲劳，对核心逻辑和关键变量进行颜色编码区分。",
+    components: [
+      { name:"dashboard.html", status:"稳定", desc:"交互式仪表盘（本页面）— 深色 SPA 可视化" },
+      { name:"渲染挂载器", status:"规划中", desc:"正则高亮渲染挂载器 — 终端降噪可视化，颜色编码关键变量" },
+    ]
+  },
+  4: {
+    name: "04 语言镜像层", tag: "L4 · 镜像", color: "#6C5CE7", status: "mvp", statusLabel: "MVP",
+    desc: "表达画像分析层。后台收集原始文本，分析高频低效表达和逻辑断层，逆向生成针对性表达训练提示。像暗箱监察的语言表达教练。",
+    components: [
+      { name:"mirror.py", status:"MVP", desc:"语言镜像分析引擎，生成表达画像报告" },
+      { name:"xw mirror", status:"MVP", desc:"CLI 入口，一键生成语言表达特征分析" },
+      { name:"语料采集", status:"规划中", desc:"后台静默收集语音转换文本 + 打字语料" },
+    ]
+  },
+  5: {
+    name: "05 数字代理层", tag: "L5 · 代理", color: "#FF6B35", status: "seed", statusLabel: "种子期",
+    desc: "终极形态：基于行为轨迹、思维流和口语特征三合一坍缩出精准的数字画像，创造'约等于我'的数字人，替主体前置试错。",
+    components: [
+      { name:"xw seed", status:"活动", desc:"种子库 CRUD（add/list/show），种下深思想法" },
+      { name:"xw imagine", status:"活动", desc:"想象力素材库 — 文字记录精致想象画面" },
+      { name:"profiler cross_analysis", status:"雏形", desc:"跨维度画像分析，50+ 会话后自动触发评估" },
+    ]
+  }
+};
+
+const commands = [
+  { name:"xw", usage:"xw", layer:1, brief:"查看上下文使用率 + 任务类型 + 预警阈值", detail:"主命令调度器。显示当前 token 使用率、活跃任务类型、上下文窗口预警阈值。无需参数，直接运行。" },
+  { name:"xw flow", usage:"xw flow", layer:1, brief:"查看当前会话任务切换路径与流转图", detail:"任务流转查看器。展示当前会话中检测到的任务类型切换序列，以流转图形式呈现编程/内容/文档之间的切换轨迹。" },
+  { name:"xw report", usage:"xw report [--week|--month]", layer:1, brief:"一键生成日/周/月行为回顾报告", detail:"行为报告生成器。支持 --week 周报和 --month 月报参数，可过滤特定项目。从 session_tasks 和 profiler_events 表提取数据生成结构化报告。" },
+  { name:"xw search", usage:'xw search "关键词"', layer:1, brief:"TF-IDF 混合语义搜索历史灵感与任务", detail:"语义搜索引擎。结合 TF-IDF 向量检索和关键词匹配，在历史灵感和任务记录中搜索相关内容。支持中英文混合查询。" },
+  { name:"xw advisor", usage:"xw advisor on/off/status", layer:1, brief:"决策参谋开关：观察用户偏好并积累知识", detail:"决策参谋系统。开启后 Hermes 在对话中观察用户偏好，自动写入 user_preferences 表，逐步积累领域知识库。支持 on/off/status 三种操作。" },
+  { name:"xw idea", usage:'xw idea "灵感内容"', layer:2, brief:"瞬时捕捉碎片灵感，自动绑定任务上下文", detail:"灵感捕获命令。灵感在 50ms 内写入数据库，自动关联当前检测到的任务类型。也可通过 ⌃I 全局快捷键弹出悬浮便签捕获。" },
+  { name:"xw flush", usage:"xw flush", layer:2, brief:"结算灵感，结合执行记录生成产品化重构报告", detail:"灵感结算与缝合。提取所有 pending 想法，结合 xw flow 执行轨迹进行交叉对比，生成 Obsidian 格式的缝合报告，输出到 Whiteboard/ 目录。" },
+  { name:"xw hotkey", usage:"xw hotkey start/stop/status", layer:2, brief:"全局快捷键守护进程控制（⌃I 弹窗）", detail:"快捷键守护进程。基于 Carbon Event API 注册全局 ⌃I 快捷键。start 启动守护，stop 停止，status 查看运行状态。" },
+  { name:"xw mirror", usage:"xw mirror", layer:4, brief:"语言镜像分析：生成表达画像报告", detail:"语言镜像分析 MVP。分析用户的语言表达特征，生成包含高频词汇、句式偏好、表达习惯的画像报告。输出到 Whiteboard/ 目录。" },
+  { name:"xw seed", usage:"xw seed add|list|show <id>", layer:5, brief:"想法种子库：种下/查看/催熟深思想法", detail:"种子库管理。add 种下新种子（含领域和标签），list 浏览所有种子，show 查看详情（关联种子、笔记、状态）。种子代表需要长时间酝酿的深思想法。" },
+  { name:"xw imagine", usage:"xw imagine", layer:5, brief:"想象力素材库 — 记录精致想象画面", detail:"想象力素材库入口。当脑海浮现精致想象画面时立即用文字精准记录，长期积累让 AI 读懂个人审美与思维风格，为未来 AIGC 视觉还原积累素材。" },
+  { name:"xw dashboard", usage:"xw dashboard", layer:3, brief:"打开交互式仪表盘（本页面）", detail:"仪表盘生成器。生成并打开此深色 SPA 仪表盘页面，包含架构图、实时数据、版本时间线和命令速查四个模块。" },
+];
+
+const GENERATED_AT = Date.now();
+
+// ═══════════════════════════════════════════
+// TAB NAVIGATION
+// ═══════════════════════════════════════════
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('tab-' + tab);
+    if (panel) panel.classList.add('active');
+    if (tab === 'data') runCountUp();
+    if (tab === 'timeline') revealTimelineNodes();
+  });
 });
+
+// ═══════════════════════════════════════════
+// ARCHITECTURE LAYER CLICK → DETAIL PANEL
+// ═══════════════════════════════════════════
+
+const detailOverlay = document.getElementById('detail-overlay');
+const detailPanel = document.getElementById('detail-panel');
+const detailContent = document.getElementById('detail-content');
+const detailClose = document.getElementById('detail-close');
+
+function openDetail(layerId) {
+  const d = layerDetails[layerId];
+  const statusColors = { active: '#27AE60', mvp: '#6C5CE7', seed: '#555' };
+  const sc = statusColors[d.status] || '#555';
+  detailContent.innerHTML = `
+    <span class="dl-tag" style="background:${d.color}22;color:${d.color}">${d.tag}</span>
+    <h3>${d.name}</h3>
+    <div class="dl-status">
+      <span class="dot" style="background:${sc};${d.status==='active'?'box-shadow:0 0 8px '+sc+';':''}"></span>
+      ${d.statusLabel}
+    </div>
+    <p class="dl-desc">${d.desc}</p>
+    <div class="dl-section">
+      <h4>组件清单</h4>
+      ${d.components.map(c => `
+        <div class="dl-comp">
+          <span class="c-dot" style="background:${d.color}"></span>
+          <span>${c.name}</span>
+          <span class="c-status" style="background:${c.status==='稳定'?'#27AE6022':c.status==='MVP'?'#6C5CE722':c.status==='活动'?'#FFD70022':'#8892a422'};color:${c.status==='稳定'?'#27AE60':c.status==='MVP'?'#6C5CE7':c.status==='活动'?'#FFD700':'#8892a4'}">${c.status}</span>
+        </div>
+        <div style="font-size:11px;color:#555;padding:0 0 6px 20px;">${c.desc}</div>
+      `).join('')}
+    </div>
+  `;
+  detailOverlay.classList.add('open');
+  detailPanel.classList.add('open');
+}
+
+function closeDetail() {
+  detailOverlay.classList.remove('open');
+  detailPanel.classList.remove('open');
+}
+
+detailClose.addEventListener('click', closeDetail);
+detailOverlay.addEventListener('click', closeDetail);
+
+document.querySelectorAll('.arch-layer').forEach(layer => {
+  layer.addEventListener('click', () => {
+    const id = parseInt(layer.dataset.layer);
+    openDetail(id);
+  });
+});
+
+// ESC to close
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDetail();
+});
+
+// ═══════════════════════════════════════════
+// COUNT-UP ANIMATION
+// ═══════════════════════════════════════════
+
+let countUpRan = false;
+
+function runCountUp() {
+  if (countUpRan) return;
+  countUpRan = true;
+  document.querySelectorAll('#stat-cards .num').forEach(el => {
+    const target = parseInt(el.dataset.target);
+    const duration = 800;
+    const start = performance.now();
+    function tick(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.floor(eased * target);
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+// ═══════════════════════════════════════════
+// TIMELINE RENDER
+// ═══════════════════════════════════════════
+
+function renderTimeline() {
+  const container = document.getElementById('timeline-container');
+  container.innerHTML = versionTimeline.map((node, i) => `
+    <div class="tl-node${node.current ? ' current' : ''}" data-tl="${i}">
+      <div class="tl-header" data-tl-header="${i}">
+        <span class="tl-version">${node.v}</span>
+        <span class="tl-date">${node.date}</span>
+        ${node.current ? '<span class="tl-current-badge">当前</span>' : ''}
+        <span class="tl-chevron">▾</span>
+      </div>
+      <div class="tl-body">
+        ${node.changes.map(c => `
+          <div class="tl-change">
+            <span class="tl-tag ${c.tag}">${c.tag}</span>${c.text}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  // Click to expand
+  container.querySelectorAll('[data-tl-header]').forEach(header => {
+    header.addEventListener('click', () => {
+      const node = header.parentElement;
+      node.classList.toggle('expanded');
+    });
+  });
+
+  // Expand current version by default
+  const cur = container.querySelector('.tl-node.current');
+  if (cur) cur.classList.add('expanded');
+}
+
+function revealTimelineNodes() {
+  const nodes = document.querySelectorAll('#timeline-container .tl-node');
+  if (nodes.length === 0) return;
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.15 });
+  nodes.forEach((n, i) => {
+    n.style.transitionDelay = (i * 40) + 'ms';
+    observer.observe(n);
+  });
+  // Also show ones already in view
+  setTimeout(() => {
+    nodes.forEach(n => {
+      const rect = n.getBoundingClientRect();
+      if (rect.top < window.innerHeight) n.classList.add('visible');
+    });
+  }, 100);
+}
+
+// ═══════════════════════════════════════════
+// COMMANDS RENDER + SEARCH
+// ═══════════════════════════════════════════
+
+function renderCommands(filter = '') {
+  const grid = document.getElementById('cmd-grid');
+  const q = filter.toLowerCase();
+  const filtered = commands.filter(c =>
+    !q || c.name.toLowerCase().includes(q) || c.brief.toLowerCase().includes(q)
+  );
+  grid.innerHTML = filtered.map(c => `
+    <div class="cmd-card">
+      <div class="cmd-card-inner">
+        <div class="cmd-face front">
+          <span class="cmd-layer-badge bl${c.layer}">L${c.layer}</span>
+          <span class="cmd-lname l${c.layer}">${c.name}</span>
+          <span class="cmd-brief">${c.brief}</span>
+        </div>
+        <div class="cmd-face back">
+          <div class="cmd-usage">
+            <code>${c.usage}</code>
+            <br><br>${c.detail}
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('cmd-search').addEventListener('input', e => {
+  renderCommands(e.target.value);
+});
+
+// ═══════════════════════════════════════════
+// UPTIME
+// ═══════════════════════════════════════════
+
+function updateUptime() {
+  const elapsed = Math.floor((Date.now() - GENERATED_AT) / 1000);
+  const h = Math.floor(elapsed / 3600);
+  const m = Math.floor((elapsed % 3600) / 60);
+  const s = elapsed % 60;
+  const parts = [];
+  if (h > 0) parts.push(h + 'h');
+  if (m > 0) parts.push(m + 'm');
+  parts.push(s + 's');
+  document.getElementById('uptime').textContent = '运行时长 ' + parts.join(' ');
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+
+renderTimeline();
+renderCommands();
+updateUptime();
+setInterval(updateUptime, 1000);
 </script>
 </body>
 </html>

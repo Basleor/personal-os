@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personal OS Dashboard</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --card-bg: #16213e;
+  --border: #2a2a4a;
+  --gold: #FFD700;
+  --orange: #FF6B35;
+  --cream: #FEF9EF;
+  --text: #e0e0e0;
+  --muted: #8892a4;
+  --green: #3fb950;
+  --blue: #58a6ff;
+  --purple: #bc8cff;
+  --radius: 12px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+.container { max-width: 960px; margin: 0 auto; padding: 40px 24px 60px; }
+
+/* ── Section titles ── */
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  margin: 48px 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Header ── */
+.header {
+  text-align: center;
+  padding: 24px 0 32px;
+}
+.header h1 {
+  font-size: 36px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--gold), var(--orange));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+.header .version {
+  display: inline-block;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 6px 0;
+}
+.header .slogan {
+  font-size: 15px;
+  color: var(--muted);
+  margin-top: 8px;
+  font-style: italic;
+}
+.header .generated {
+  font-size: 11px;
+  color: #555;
+  margin-top: 8px;
+}
+
+/* ── Stats cards ── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 16px;
+  transition: border-color .2s, transform .2s;
+}
+.card:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+.card .num {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1.1;
+}
+.card .num.orange { color: var(--orange); }
+.card .num.green { color: var(--green); }
+.card .num.blue { color: var(--blue); }
+.card .label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.card .sub {
+  font-size: 11px;
+  color: #555;
+  margin-top: 2px;
+}
+
+/* ── Architecture SVG ── */
+.arch-wrap {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 16px 16px;
+  overflow-x: auto;
+}
+.arch-wrap svg { display: block; margin: 0 auto; }
+
+/* ── Commands panel ── */
+.cmds {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.cmd-group { border-bottom: 1px solid var(--border); }
+.cmd-group:last-child { border-bottom: none; }
+.cmd-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s;
+}
+.cmd-header:hover { background: rgba(255,255,255,.03); }
+.cmd-header .layer-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cmd-header .layer-tag.l1 { background: #3fb95022; color: var(--green); }
+.cmd-header .layer-tag.l2 { background: #58a6ff22; color: var(--blue); }
+.cmd-header .layer-tag.l3 { background: #bc8cff22; color: var(--purple); }
+.cmd-header .layer-tag.l4 { background: #f0c04022; color: var(--gold); }
+.cmd-header .layer-tag.l5 { background: #ff6b3522; color: var(--orange); }
+.cmd-header .group-name { font-size: 13px; font-weight: 600; flex:1; }
+.cmd-header .chevron {
+  font-size: 11px; color: var(--muted);
+  transition: transform .2s;
+}
+.cmd-group.open .cmd-header .chevron { transform: rotate(90deg); }
+.cmd-body {
+  display: none;
+  padding: 0 18px 14px;
+}
+.cmd-group.open .cmd-body { display: block; }
+.cmd-row {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 5px 0;
+  font-size: 13px;
+  font-family: "SF Mono", "Menlo", "Monaco", monospace;
+}
+.cmd-row .cmd-name {
+  color: var(--gold);
+  font-weight: 600;
+  min-width: 130px;
+}
+.cmd-row .cmd-arrow { color: var(--muted); font-size: 11px; }
+.cmd-row .cmd-desc { color: var(--muted); }
+
+/* ── Principles ── */
+.principles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.principle {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition: border-color .2s;
+}
+.principle:hover { border-color: var(--orange); }
+.principle .p-num {
+  display: inline-block;
+  width: 26px; height: 26px;
+  background: var(--orange);
+  color: #fff;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 26px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.principle .p-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.principle .p-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ── Roadmap ── */
+.roadmap {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 640px) { .roadmap { grid-template-columns: 1fr; } }
+.roadmap-col {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.roadmap-col h3 {
+  font-size: 13px;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.roadmap-col ul {
+  list-style: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.roadmap-col li { padding: 4px 0; }
+.roadmap-col li::before { content: "▸ "; color: var(--orange); }
+
+/* ── Seeds ── */
+.seed-list {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.seed-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.seed-item .seed-dot {
+  width: 8px; height: 8px;
+  background: var(--orange);
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.seed-item .seed-tags {
+  font-size: 10px;
+  color: var(--orange);
+  margin-bottom: 2px;
+}
+.seed-item .seed-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ── Path refs ── */
+.paths {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  font-family: "SF Mono", "Menlo", "Monaco", monospace;
+  font-size: 12px;
+}
+.paths .path-row {
+  display: flex; gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+}
+.paths .path-row:last-child { border-bottom: none; }
+.paths .path-icon { width: 20px; text-align: center; flex-shrink: 0; }
+.paths .path-dir { color: var(--blue); min-width: 200px; }
+.paths .path-desc { color: var(--muted); }
+
+/* ── Footer ── */
+.footer {
+  text-align: center;
+  color: #444;
+  font-size: 11px;
+  margin-top: 48px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── SVG architecture interaction ── */
+.arch-layer { transition: opacity .2s; }
+.arch-layer rect { transition: fill .3s, stroke .3s; }
+.arch-layer:hover rect { filter: brightness(1.3); }
+.arch-layer:hover .layer-detail { opacity: 1; }
+.layer-detail { opacity: 0; transition: opacity .3s; }
+.connector-line { transition: stroke .3s; }
+.arch-layer:hover ~ .arch-layer .connector-line,
+.arch-wrap:hover .connector-line { stroke: var(--gold); }
+
+/* ── Tooltip ── */
+[data-tooltip] { position: relative; cursor: help; }
+[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── Pulse dot ── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+.pulse { animation: pulse 2s infinite; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ═══ HEADER ═══ -->
+<div class="header">
+  <h1>Personal OS Dashboard</h1>
+  <div class="version">v2.8.0 · 外挂硬盘物理部署</div>
+  <div class="slogan">换机即用，拔盘即走 — 思维痕迹永不丢失</div>
+  <div class="generated">生成时间: 2026-05-25 · 数据来源: analytics.db + bridge.db</div>
+</div>
+
+<!-- ═══ SECTION 1: REAL-TIME DATA ═══ -->
+<div class="section-title">实时数据面板</div>
+<div class="cards">
+  <div class="card">
+    <div class="num">2</div>
+    <div class="label">活跃会话</div>
+    <div class="sub">session_tasks 去重</div>
+  </div>
+  <div class="card">
+    <div class="num blue">12</div>
+    <div class="label">任务流转记录</div>
+    <div class="sub">session_tasks 总数</div>
+  </div>
+  <div class="card">
+    <div class="num orange">13</div>
+    <div class="label">灵感碎片</div>
+    <div class="sub">1 条待处理 · 12 条已缝合</div>
+  </div>
+  <div class="card">
+    <div class="num green">5</div>
+    <div class="label">想法种子</div>
+    <div class="sub">5 颗休眠中 · 等待催熟</div>
+  </div>
+  <div class="card">
+    <div class="num">1</div>
+    <div class="label">用户偏好</div>
+    <div class="sub">决策参谋知识库</div>
+  </div>
+  <div class="card">
+    <div class="num orange">1</div>
+    <div class="label">桥梁待处理</div>
+    <div class="sub">Hermes 小龙虾 协作</div>
+  </div>
+</div>
+
+<!-- ═══ SECTION 2: FIVE-LAYER ARCHITECTURE ═══ -->
+<div class="section-title">五层演进架构</div>
+<div class="arch-wrap">
+<svg viewBox="0 0 840 640" width="100%" height="auto" style="max-width:840px;">
+
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="grad-l1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3fb95022"/><stop offset="100%" stop-color="#3fb95008"/>
+    </linearGradient>
+    <linearGradient id="grad-l2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#58a6ff22"/><stop offset="100%" stop-color="#58a6ff08"/>
+    </linearGradient>
+    <linearGradient id="grad-l3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#bc8cff22"/><stop offset="100%" stop-color="#bc8cff08"/>
+    </linearGradient>
+    <linearGradient id="grad-l4" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f0c04022"/><stop offset="100%" stop-color="#f0c04008"/>
+    </linearGradient>
+    <linearGradient id="grad-l5" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ff6b3522"/><stop offset="100%" stop-color="#ff6b3508"/>
+    </linearGradient>
+  </defs>
+
+  <!-- L5: 数字代理层 -->
+  <g class="arch-layer" transform="translate(20,20)">
+    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l5)" stroke="#FF6B35" stroke-width="1.5" stroke-dasharray="6,3"/>
+    <text x="18" y="30" font-size="15" font-weight="700" fill="#FF6B35">05 数字代理层</text>
+    <text x="18" y="50" font-size="12" fill="#8892a4">「思维复制 / 决策模拟 / 数字分身」</text>
+    <text x="18" y="72" font-size="11" fill="#555">
+      状态: 种子期 🌱 | 画像: 5维数据采集中 | 触发条件: 50+会话后自动评估
+    </text>
+    <!-- Status dot -->
+    <circle cx="770" cy="18" r="5" fill="#FF6B35" opacity="0.5"/>
+    <text x="755" y="22" font-size="9" fill="#555" text-anchor="end">种子期</text>
+  </g>
+
+  <!-- connector -->
+  <line x1="420" y1="110" x2="420" y2="135" stroke="#2a2a4a" stroke-width="1.5" class="connector-line"/>
+  <circle cx="420" cy="122" r="3" fill="#FFD700" opacity="0.3"/>
+
+  <!-- L4: 语言镜像层 -->
+  <g class="arch-layer" transform="translate(20,135)">
+    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l4)" stroke="#f0c040" stroke-width="1.5"/>
+    <text x="18" y="30" font-size="15" font-weight="700" fill="#f0c040">04 语言镜像层</text>
+    <text x="18" y="50" font-size="12" fill="#8892a4">「表达画像 / 行为模式 / 隐藏信号分析」</text>
+    <text x="18" y="72" font-size="11" fill="#8892a4">
+      状态: MVP · xw mirror 可用 | 能力: 表达画像报告生成
+    </text>
+    <circle cx="770" cy="18" r="5" fill="#f0c040"/>
+    <text x="755" y="22" font-size="9" fill="#8892a4" text-anchor="end">MVP</text>
+  </g>
+
+  <!-- connector -->
+  <line x1="420" y1="225" x2="420" y2="250" stroke="#2a2a4a" stroke-width="1.5" class="connector-line"/>
+  <circle cx="420" cy="237" r="3" fill="#FFD700" opacity="0.3"/>
+
+  <!-- L3: 交互渲染层 -->
+  <g class="arch-layer" transform="translate(20,250)">
+    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l3)" stroke="#bc8cff" stroke-width="1.5" stroke-dasharray="6,3"/>
+    <text x="18" y="30" font-size="15" font-weight="700" fill="#bc8cff">03 交互渲染层</text>
+    <text x="18" y="50" font-size="12" fill="#8892a4">「终端降噪 / 颜色编码 / 注意力保护」</text>
+    <text x="18" y="72" font-size="11" fill="#555">
+      状态: 种子期 🌱 | 设计已明确: 正则高亮渲染挂载器
+    </text>
+    <circle cx="770" cy="18" r="5" fill="#bc8cff" opacity="0.5"/>
+    <text x="755" y="22" font-size="9" fill="#555" text-anchor="end">种子期</text>
+  </g>
+
+  <!-- connector -->
+  <line x1="420" y1="340" x2="420" y2="365" stroke="#2a2a4a" stroke-width="1.5" class="connector-line"/>
+  <circle cx="420" cy="352" r="3" fill="#FFD700" opacity="0.5"/>
+
+  <!-- L2: 灵感白板层 -->
+  <g class="arch-layer" transform="translate(20,365)">
+    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l2)" stroke="#58a6ff" stroke-width="2"/>
+    <text x="18" y="30" font-size="15" font-weight="700" fill="#58a6ff">02 灵感白板层</text>
+    <text x="18" y="50" font-size="12" fill="#e0e0e0">「碎片捕获 / 关联缝合 / Obsidian 知识库」</text>
+    <text x="18" y="72" font-size="11" fill="#8892a4">
+      状态: 活跃 ✅ | 13条灵感 · ⌃I 弹窗 + xw idea + flush 方案B | macOS 原生应用开发中
+    </text>
+    <circle cx="770" cy="18" r="6" fill="#3fb950" class="pulse"/>
+    <text x="753" y="22" font-size="9" fill="#3fb950" text-anchor="end">活跃</text>
+  </g>
+
+  <!-- connector -->
+  <line x1="420" y1="455" x2="420" y2="480" stroke="#2a2a4a" stroke-width="2" class="connector-line"/>
+  <circle cx="420" cy="467" r="4" fill="#FFD700" opacity="0.7"/>
+
+  <!-- L1: 系统内核层 -->
+  <g class="arch-layer" transform="translate(20,480)">
+    <rect x="0" y="0" width="800" height="90" rx="10" fill="url(#grad-l1)" stroke="#3fb950" stroke-width="2"/>
+    <text x="18" y="30" font-size="15" font-weight="700" fill="#3fb950">01 系统内核层</text>
+    <text x="18" y="50" font-size="12" fill="#e0e0e0">「行为报告 / 任务追踪 / 偏好分析 / 桥梁通信」</text>
+    <text x="18" y="72" font-size="11" fill="#8892a4">
+      状态: 活跃 ✅ | 12条任务 · 2个会话 · xw report + xw advisor + xw search | 飞书桥接已通
+    </text>
+    <circle cx="770" cy="18" r="6" fill="#3fb950" class="pulse"/>
+    <text x="753" y="22" font-size="9" fill="#3fb950" text-anchor="end">活跃</text>
+  </g>
+
+  <!-- data flow arrows on the right -->
+  <defs>
+    <marker id="arrow-up" markerWidth="6" markerHeight="8" refX="3" refY="4" orient="auto">
+      <path d="M0,8 L3,0 L6,8" fill="#2a2a4a"/>
+    </marker>
+  </defs>
+  <line x1="790" y1="545" x2="790" y2="65" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4,4" marker-end="url(#arrow-up)"/>
+  <text x="800" y="305" font-size="9" fill="#333" transform="rotate(90,800,305)">数据向上流动 → 画像向下沉淀</text>
+
+</svg>
+</div>
+
+<!-- ═══ SECTION 3: COMMAND REFERENCE ═══ -->
+<div class="section-title">命令速查手册</div>
+<div class="cmds">
+
+  <!-- L1 -->
+  <div class="cmd-group open">
+    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-tag l1">L1 内核</span>
+      <span class="group-name">系统内核层命令</span>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="cmd-body">
+      <div class="cmd-row"><span class="cmd-name">xw</span><span class="cmd-arrow">→</span><span class="cmd-desc">查看上下文使用率 + 任务类型 + 预警阈值</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw flow</span><span class="cmd-arrow">→</span><span class="cmd-desc">查看当前会话任务切换路径与流转图</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw report</span><span class="cmd-arrow">→</span><span class="cmd-desc">一键生成日/周/月行为回顾报告，支持项目过滤</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw search "..."</span><span class="cmd-arrow">→</span><span class="cmd-desc">TF-IDF 混合语义搜索历史灵感与任务</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw advisor on/off</span><span class="cmd-arrow">→</span><span class="cmd-desc">决策参谋开关：观察用户偏好并积累领域知识</span></div>
+    </div>
+  </div>
+
+  <!-- L2 -->
+  <div class="cmd-group open">
+    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-tag l2">L2 灵感</span>
+      <span class="group-name">灵感白板层命令</span>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="cmd-body">
+      <div class="cmd-row"><span class="cmd-name">xw idea "..."</span><span class="cmd-arrow">→</span><span class="cmd-desc">瞬时捕捉碎片灵感，自动绑定当前任务上下文</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw flush</span><span class="cmd-arrow">→</span><span class="cmd-desc">结算灵感，结合执行记录生成产品化重构报告</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw hotkey start/stop</span><span class="cmd-arrow">→</span><span class="cmd-desc">全局快捷键守护进程控制（⌃I 弹窗）</span></div>
+    </div>
+  </div>
+
+  <!-- L3 -->
+  <div class="cmd-group">
+    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-tag l3">L3 渲染</span>
+      <span class="group-name">交互渲染层命令</span>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="cmd-body">
+      <div class="cmd-row"><span class="cmd-name">xw dashboard</span><span class="cmd-arrow">→</span><span class="cmd-desc">深色 SVG 网页仪表盘，饼图+柱状图可视化</span></div>
+      <div class="cmd-row"><span class="cmd-name">(规划中)</span><span class="cmd-arrow">→</span><span class="cmd-desc">正则高亮渲染挂载器 — 终端降噪可视化</span></div>
+    </div>
+  </div>
+
+  <!-- L4 -->
+  <div class="cmd-group">
+    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-tag l4">L4 镜像</span>
+      <span class="group-name">语言镜像层命令</span>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="cmd-body">
+      <div class="cmd-row"><span class="cmd-name">xw mirror</span><span class="cmd-arrow">→</span><span class="cmd-desc">语言镜像分析 MVP：生成表达画像报告</span></div>
+    </div>
+  </div>
+
+  <!-- L5 -->
+  <div class="cmd-group">
+    <div class="cmd-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-tag l5">L5 代理</span>
+      <span class="group-name">数字代理层命令</span>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="cmd-body">
+      <div class="cmd-row"><span class="cmd-name">xw seed add</span><span class="cmd-arrow">→</span><span class="cmd-desc">种下深思想法种子（含领域和标签）</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw seed list</span><span class="cmd-arrow">→</span><span class="cmd-desc">浏览所有已种下的想法种子</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw seed show &lt;id&gt;</span><span class="cmd-arrow">→</span><span class="cmd-desc">查看种子详情（关联种子、笔记、状态）</span></div>
+      <div class="cmd-row"><span class="cmd-name">xw imagine</span><span class="cmd-arrow">→</span><span class="cmd-desc">想象力素材库 — 文字记录精致想象画面</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SECTION 4: DESIGN PRINCIPLES ═══ -->
+<div class="section-title">产品设计原则</div>
+<div class="principles">
+  <div class="principle">
+    <div class="p-num">1</div>
+    <div class="p-title">零摩擦是生存底线</div>
+    <div class="p-desc">灵感在3秒内不记录就会消失。删掉一切不必要的步骤——不要求标题、分类、确认。直接存，安静地存。</div>
+  </div>
+  <div class="principle">
+    <div class="p-num">2</div>
+    <div class="p-title">捕获与整理必须解耦</div>
+    <div class="p-desc">捕获发生在想法产生的瞬间（&lt;50ms），处理发生在几小时后的 flush 阶段。大脑产生想法，AI 理解想法。</div>
+  </div>
+  <div class="principle">
+    <div class="p-num">3</div>
+    <div class="p-title">自包含配置</div>
+    <div class="p-desc">所有设置内建在 ⌘K 面板中。用户永远不需要打开系统设置、终端或编辑 JSON 文件。</div>
+  </div>
+  <div class="principle">
+    <div class="p-num">4</div>
+    <div class="p-title">色彩是识别信号</div>
+    <div class="p-desc">亮黄标题 #FFD700、暖奶油底 #FEF9EF、橙按钮 #FF6B35——在任何背景下都能一眼识别。</div>
+  </div>
+  <div class="principle">
+    <div class="p-num">5</div>
+    <div class="p-title">数据跟着人走</div>
+    <div class="p-desc">一切存在外挂硬盘上。换一台 Mac，插上盘，所有灵感、报告、种子都在——"换机即用，拔盘即走"。</div>
+  </div>
+  <div class="principle">
+    <div class="p-num">6</div>
+    <div class="p-title">工具应该自我成长</div>
+    <div class="p-desc">每一次使用都在积累数据，每一次 flush 都在产生新洞察。配置用 JSON，数据结构留扩展字段。</div>
+  </div>
+  <div class="principle">
+    <div class="p-num">7</div>
+    <div class="p-title">文档信息密度</div>
+    <div class="p-desc">每次功能迭代后自动更新 PRD、命令速查、系统宪法。确保新环境零上下文快速复现。</div>
+  </div>
+  <div class="principle">
+    <div class="p-num">8</div>
+    <div class="p-title">双脑协作分工</div>
+    <div class="p-desc">Hermes 大脑（深度推理+代码执行）+ 小龙虾前哨（多渠道消息+轻量回复），通过 bridge 共享状态。</div>
+  </div>
+</div>
+
+<!-- ═══ SECTION 5: ROADMAP + SEEDS ═══ -->
+<div class="section-title">演进路线</div>
+<div class="roadmap">
+  <div class="roadmap-col">
+    <h3>✅ 当前能力</h3>
+    <ul>
+      <li>行为报告（日/周/月）</li>
+      <li>灵感捕获 + 异步缝合</li>
+      <li>TF-IDF 语义搜索</li>
+      <li>全局热键悬浮便签</li>
+      <li>决策参谋偏好学习</li>
+      <li>飞书桥接（龙虾前哨）</li>
+      <li>种子库 CRUD</li>
+      <li>语言镜像 MVP</li>
+    </ul>
+  </div>
+  <div class="roadmap-col">
+    <h3>🔨 近期计划</h3>
+    <ul>
+      <li>CtxIdea macOS 原生应用</li>
+      <li>终端降噪渲染挂载器</li>
+      <li>多 Agent 协作增强</li>
+      <li>种子催熟自动触发</li>
+      <li>向量检索升级</li>
+    </ul>
+  </div>
+  <div class="roadmap-col">
+    <h3>🔮 远期愿景</h3>
+    <ul>
+      <li>数字画像三合一坍缩</li>
+      <li>数字代理前置试错</li>
+      <li>想象力素材库 AIGC 还原</li>
+      <li>认知垂直整合闭环</li>
+      <li>跨设备外挂盘生态</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══ SECTION 5b: THINKING SEEDS ═══ -->
+<div class="section-title">思考中的方向（来自种子库）</div>
+<div class="seed-list">
+  <div class="seed-item">
+    <div class="seed-dot"></div>
+    <div>
+      <div class="seed-tags">产品设计 · 多代理协作</div>
+      <div class="seed-text">多工具编排时的思维清晰助手：同时操作 Hermes/Halis/OpenClaw 等多 Agent 时需要一个专注于帮助人梳理思路的助手——聚焦单一任务，不被多 Agent 噪音干扰。</div>
+    </div>
+  </div>
+  <div class="seed-item">
+    <div class="seed-dot"></div>
+    <div>
+      <div class="seed-tags">方法论 · 产品设计</div>
+      <div class="seed-text">学习的前提不是方法，是注意力。快速低成本投入 + 长时间坚持不被外界打扰——这是一切学习方法见效的前提。娱乐化学习会耗散专注力，使思考颗粒度下降。</div>
+    </div>
+  </div>
+  <div class="seed-item">
+    <div class="seed-dot"></div>
+    <div>
+      <div class="seed-tags">创意创作 · 数字代理</div>
+      <div class="seed-text">想象力素材库：当脑海浮现精致想象画面时立即用文字精准记录 → 借 AIGC 还原成视觉画面。长期积累让 AI 读懂个人审美与思维风格，达到临界阈值后实现「不动手也能成为独立创作者」。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SECTION 6: FILE PATHS ═══ -->
+<div class="section-title">系统文件路径速查</div>
+<div class="paths">
+  <div class="path-row">
+    <span class="path-icon">🗄️</span>
+    <span class="path-dir">context-system/analytics.db</span>
+    <span class="path-desc">主数据库（6表：ideas / session_tasks / seeds / user_preferences / decisions / profiler_events）</span>
+  </div>
+  <div class="path-row">
+    <span class="path-icon">🧠</span>
+    <span class="path-dir">context-system/core/</span>
+    <span class="path-desc">核心模块（db.py / ideas.py / detector.py / tracker.py / profiler.py / mirror.py / vector_search.py）</span>
+  </div>
+  <div class="path-row">
+    <span class="path-icon">📜</span>
+    <span class="path-dir">scripts/xw*</span>
+    <span class="path-desc">命令行工具（12个子命令：xw / xw-report / xw-idea / xw-flush / xw-search / xw-mirror / xw-seed / ...）</span>
+  </div>
+  <div class="path-row">
+    <span class="path-icon">📝</span>
+    <span class="path-dir">context-system/Whiteboard/</span>
+    <span class="path-desc">flush 导出目录（Obsidian 格式报告 + 独立灵感 .md 文件）</span>
+  </div>
+  <div class="path-row">
+    <span class="path-icon">🌉</span>
+    <span class="path-dir">../bridge/</span>
+    <span class="path-desc">双脑协作桥梁（bridge.py + 共享上下文 + 双方档案 + bridge.db）</span>
+  </div>
+  <div class="path-row">
+    <span class="path-icon">📐</span>
+    <span class="path-dir">context-system/Personal_OS_Manifest.md</span>
+    <span class="path-desc">系统宪法种子 — 五层架构 + 进化契约 + 版本演进记录</span>
+  </div>
+  <div class="path-row">
+    <span class="path-icon">🎨</span>
+    <span class="path-dir">applications/CtxIdea/</span>
+    <span class="path-desc">macOS 原生灵感便签（Swift + SwiftUI，开发中）</span>
+  </div>
+  <div class="path-row">
+    <span class="path-icon">⚙️</span>
+    <span class="path-dir">context-system/popup_config.json</span>
+    <span class="path-desc">悬浮便签配置（快捷键 / 透明度 / 窗口尺寸 / 位置）</span>
+  </div>
+</div>
+
+<!-- ═══ FOOTER ═══ -->
+<div class="footer">
+  Personal OS Dashboard · 数据来源: analytics.db + bridge.db · 生成: 2026-05-25<br>
+  外挂盘路径: /Volumes/13384923891/hermes-agent/ · 系统版本 v2.8.0<br>
+  每次打开此页面都会显示数据库中的最新数据（静态快照）
+</div>
+
+</div>
+
+<!-- toggle all cmd groups -->
+<script>
+// Expand L1 and L2 by default, collapse L3-L5
+document.querySelectorAll('.cmd-group').forEach((g, i) => {
+  if (i >= 2) g.classList.remove('open');
+});
+</script>
+</body>
+</html>

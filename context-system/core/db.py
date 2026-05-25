@@ -126,14 +126,15 @@ def init_db():
 #  Ideas CRUD (used by ideas.py and ctx-idea)
 # ═══════════════════════════════════════════════════════════════
 
-def insert_idea(timestamp: str, session_id: str, task_type: str, raw_idea: str, project: str = "", source: str = "popup") -> int:
+def insert_idea(timestamp: str, session_id: str, task_type: str, raw_idea: str, project: str = "", source: str = "popup", related_task: str = "") -> int:
     """Insert a new idea row. Returns the new row id.
-    source: 'popup' (⌃I), 'cli' (xw idea), 'reflect' (深度反思)"""
+    source: 'popup' (⌃I), 'cli' (xw idea), 'reflect' (深度反思)
+    related_task: 产生此灵感时正在执行的任务描述（可空，空表示灵感独立于当前任务）"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO ideas (timestamp, session_id, current_task_type, raw_idea, project, source) VALUES (?, ?, ?, ?, ?, ?)",
-        (timestamp, session_id, task_type, raw_idea, project, source)
+        "INSERT INTO ideas (timestamp, session_id, current_task_type, raw_idea, project, source, related_task) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (timestamp, session_id, task_type, raw_idea, project, source, related_task)
     )
     conn.commit()
     row_id = cursor.lastrowid

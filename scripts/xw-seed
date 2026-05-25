@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""
+Personal OS — xw seed: 原生想法种子库
+用法:
+  xw seed add "内容" --domain 产品设计 --tags 标签1,标签2
+  xw seed list [--domain 领域] [--status dormant]
+  xw seed show <id>
+  xw seed link <id1> <id2>  关联两颗种子
+  xw seed sprout <id>       标记为催熟中
+"""
+import sys, os, json, time
+sys.path.insert(0, "/Volumes/13384923891/hermes-agent/context-system")
+import sqlite3
+
+DB = "/Volumes/13384923891/hermes-agent/context-system/analytics.db"
+SESSION = os.getenv("HERMES_SESSION_ID", "BOOT_SESSION")
+
+def cmd_add():
+    content = sys.argv[3] if len(sys.argv) > 3 else ""
+    domain = ""
+    tags = ""
+    i = 3
+    while i < len(sys.argv):
+        if sys.argv[i] == "--domain" and i+1 < len(sys.argv):
+            domain = sys.argv[i+1]; i += 2
+        elif sys.argv[i] == "--tags" and i+1 < len(sys.argv):
+            tags = sys.argv[i+1]; i += 2
+        else:
+            content = sys.argv[i]; i += 1
+
+    if not content:
+        print("用法: xw seed add \"内容\" [--domain 领域] [--tags 标签]")
+        return
+
+    conn = sqlite3.connect(DB)
+    conn.execute(
+        "INSERT INTO seeds (timestamp, session_id, content, domain, tags) VALUES (?,?,?,?,?)",
+        (time.strftime("%Y-%m-%d %H:%M:%S"), SESSION, content, domain, tags)
+    )
+    conn.commit()
+    sid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.close()
+    print(f"🌱 种子 #{sid} 已种下 [{domain or '未分类'}]")
+
+def cmd_list():
+    domain = ""
+    status = ""
+    i = 2
+    while i < len(sys.argv):
+        if sys.argv[i] == "--domain" and i+1 < len(sys.argv):
+            domain = sys.argv[i+1]; i += 2
+        elif sys.argv[i] == "--status" and i+1 < len(sys.argv):
+            status = sys.argv[i+1]; i += 2
+        else:
+            i += 1
+
+    conn = sqlite3.connect(DB)
+    q = "SELECT id, timestamp, domain, tags, status, substr(content,1,60) FROM seeds WHERE 1=1"
+    params = []
+    if domain:
+        q += " AND domain LIKE ?"; params.append(f"%{domain}%")
+    if status:
+        q += " AND status=?"; params.append(status)
+    q += " ORDER BY id DESC LIMIT 30"
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+
+    if not rows:
+        print("🌱 种子库为空")
+        return
+    print(f"🌱 种子库 ({len(rows)} 颗):")
+    for r in rows:
+        emoji = {"dormant": "💤", "sprouting": "🌿", "blooming": "🌸"}.get(r[4], "💤")
+        print(f"  {emoji} #{r[0]} [{r[2]}] {r[5]}...")
+
+def cmd_show():
+    if len(sys.argv) < 4:
+        print("用法: xw seed show <id>"); return
+    sid = int(sys.argv[3])
+    conn = sqlite3.connect(DB)
+    row = conn.execute("SELECT * FROM seeds WHERE id=?", (sid,)).fetchone()
+    conn.close()
+    if not row:
+        print(f"✗ 种子 #{sid} 不存在"); return
+    print(f"🌱 种子 #{row[0]} [{row[4]}] {row[5]}")
+    print(f"   时间: {row[1]}")
+    print(f"   内容: {row[3]}")
+    if row[6]:
+        print(f"   关联: #{row[6]}")
+
+def main():
+    if len(sys.argv) < 2:
+        print("xw seed {add|list|show|link|sprout}")
+        return
+    cmd = sys.argv[1]
+    if cmd == "add": cmd_add()
+    elif cmd == "list": cmd_list()
+    elif cmd == "show": cmd_show()
+    else: print(f"未知: {cmd}")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,42 @@
+#!/bin/bash
+# xw imagine — 想象力素材库：将灵感种子转为 AIGC 画面
+DRIVE="/Volumes/13384923891/hermes-agent"
+GALLERY="$DRIVE/context-system/Gallery"
+SID="${2}"
+
+case "${1:-list}" in
+    list)
+        echo "🎨 想象力素材库"
+        python3 -c "
+import sqlite3
+conn = sqlite3.connect('$DRIVE/context-system/analytics.db')
+rows = conn.execute(\"SELECT id, substr(content,1,80) FROM seeds WHERE domain LIKE '%创意%' ORDER BY id\").fetchall()
+if not rows: print('  (空)')
+else:
+    for r in rows: print(f'  🌱 #{r[0]} {r[1]}...')
+conn.close()
+"
+        ;;
+    generate)
+        [ -z "$SID" ] && echo "用法: xw imagine generate <种子ID>" && exit 1
+        echo "🎨 正在将种子 #${SID} 转化为 AIGC prompt..."
+        python3 <<PYEOF
+import sqlite3, time
+conn = sqlite3.connect('$DRIVE/context-system/analytics.db')
+row = conn.execute('SELECT content FROM seeds WHERE id=?', (${SID},)).fetchone()
+conn.close()
+if not row:
+    print(f'种子 #${SID} 不存在')
+else:
+    prompt = f'AIGC 视觉化 prompt（种子 #${SID}）:\n---\n{row[0]}'
+    print(prompt)
+    path = f'$GALLERY/imagine_${SID}_' + time.strftime('%Y%m%d_%H%M%S') + '.md'
+    with open(path, 'w') as f:
+        f.write(prompt)
+    print(f'\n✓ 已保存: {path}')
+PYEOF
+        ;;
+    *)
+        echo "xw imagine {list|generate <id>}"
+        ;;
+esac
